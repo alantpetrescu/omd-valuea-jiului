@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:omd-valea-jiului:reputation-monitoring-package:1.0",
+  "title": "OMD Valea Jiului Reputation Monitoring Package v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packageType",
+    "schemaVersion",
+    "metadata",
+    "reportingPeriod",
+    "reputationSnapshots"
+  ],
+  "properties": {
+    "packageType": {
+      "const": "OMD_REPUTATION_MONITORING_PACKAGE"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "reportingPeriod": {
+      "$ref": "#/$defs/reportingPeriod"
+    },
+    "reputationSnapshots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reputationSnapshot"
+      }
+    }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packageId",
+        "generatedAt",
+        "purpose",
+        "source",
+        "application"
+      ],
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "purpose": {
+          "enum": [
+            "BASELINE",
+            "QUARTERLY_IMPORT",
+            "DEMO_SEED",
+            "AD_HOC"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "application": {
+          "const": "OMD Valea Jiului – Sistem digital de marketing"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "reportingPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "startDate",
+        "endDate"
+      ],
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "startDate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "endDate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Z0-9_\\-]+$"
+        },
+        "label": {
+          "type": "string"
+        },
+        "recordId": {
+          "type": "string"
+        }
+      }
+    },
+    "performanceMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "impressions",
+        "reach",
+        "views",
+        "reactions",
+        "comments",
+        "shares",
+        "saves",
+        "clicks",
+        "spend"
+      ],
+      "properties": {
+        "impressions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reach": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "views": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reactions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "comments": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "shares": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "saves": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "clicks": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "spend": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "performanceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalKey",
+        "activationExternalKey",
+        "materialExternalKey",
+        "channelCode",
+        "measurementType",
+        "observedAt",
+        "provider",
+        "currency",
+        "metrics"
+      ],
+      "properties": {
+        "externalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activationExternalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "materialExternalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "channelCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platformExternalId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "measurementType": {
+          "enum": [
+            "CUMULATIVE_SNAPSHOT",
+            "PERIOD_TOTAL"
+          ]
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provider": {
+          "$ref": "#/$defs/provider"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "metrics": {
+          "$ref": "#/$defs/performanceMetrics"
+        }
+      }
+    },
+    "reputationMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mentionsCount",
+        "reviewsCount",
+        "averageRating",
+        "positiveSharePct",
+        "neutralSharePct",
+        "negativeSharePct",
+        "sentimentAnalyzedCount"
+      ],
+      "properties": {
+        "mentionsCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reviewsCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "averageRating": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "positiveSharePct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "neutralSharePct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "negativeSharePct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "sentimentAnalyzedCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "themeMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label",
+        "mentionsCount",
+        "sharePct",
+        "score"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "mentionsCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "sharePct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "score": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "sourceMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label",
+        "mentionsCount",
+        "sharePct",
+        "reviewsCount",
+        "averageRating",
+        "positiveSharePct"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "mentionsCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "sharePct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "reviewsCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "averageRating": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "positiveSharePct": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "externalKey",
+        "label"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "DESTINATION",
+            "UAT",
+            "CUSTOM"
+          ]
+        },
+        "externalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "reputationSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalKey",
+        "scope",
+        "observedAt",
+        "provider",
+        "metrics",
+        "themes",
+        "sources"
+      ],
+      "properties": {
+        "externalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provider": {
+          "$ref": "#/$defs/provider"
+        },
+        "metrics": {
+          "$ref": "#/$defs/reputationMetrics"
+        },
+        "themes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/themeMetric"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceMetric"
+          }
+        }
+      }
+    }
+  }
+}

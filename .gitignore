@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# Runtime storage — real files live here, they are not source
+storage/uploads/*
+storage/import-temp/*
+!storage/uploads/.gitkeep
+!storage/import-temp/.gitkeep

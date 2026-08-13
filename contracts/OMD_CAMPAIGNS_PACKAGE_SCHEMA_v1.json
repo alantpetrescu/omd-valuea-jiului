@@ -1,0 +1,1249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:omd-valea-jiului:campaigns-package:1.0",
+  "title": "OMD Valea Jiului Campaigns Package v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packageType",
+    "schemaVersion",
+    "metadata",
+    "strategicData",
+    "catalogs",
+    "campaigns"
+  ],
+  "properties": {
+    "packageType": {
+      "const": "OMD_CAMPAIGNS_PACKAGE"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "metadata": {
+      "$ref": "#/$defs/packageMetadata"
+    },
+    "strategicData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategyVersion",
+        "pillars",
+        "programs",
+        "objectives"
+      ],
+      "properties": {
+        "strategyVersion": {
+          "$ref": "#/$defs/strategyVersion"
+        },
+        "pillars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/pillarItem"
+          }
+        },
+        "programs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/programItem"
+          }
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/objectiveItem"
+          }
+        }
+      }
+    },
+    "catalogs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaignTypes",
+        "campaignStatuses",
+        "audiences",
+        "ctas",
+        "products",
+        "channels",
+        "seasonalityTypes",
+        "activationChannels",
+        "implementationModes",
+        "fundingTypes"
+      ],
+      "properties": {
+        "campaignTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "campaignStatuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "ctas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "seasonalityTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "activationChannels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "implementationModes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        },
+        "fundingTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogItem"
+          }
+        }
+      }
+    },
+    "campaigns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/campaign"
+      }
+    }
+  },
+  "$defs": {
+    "catalogRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "catalogItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "displayLabel": {
+          "type": "string"
+        },
+        "hint": {
+          "type": "string"
+        }
+      }
+    },
+    "pillarItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label",
+        "displayLabel",
+        "hint"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "displayLabel": {
+          "type": "string"
+        },
+        "hint": {
+          "type": "string"
+        }
+      }
+    },
+    "programItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "name",
+        "result",
+        "objectiveCodes",
+        "marketingObjective",
+        "approach",
+        "result2028",
+        "targetGroupsText",
+        "kpiText",
+        "sourcesText",
+        "annualActions",
+        "validationStatus",
+        "label"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "objectiveCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "marketingObjective": {
+          "type": "string"
+        },
+        "approach": {
+          "type": "string"
+        },
+        "result2028": {
+          "type": "string"
+        },
+        "targetGroupsText": {
+          "type": "string"
+        },
+        "kpiText": {
+          "type": "string"
+        },
+        "sourcesText": {
+          "type": "string"
+        },
+        "annualActions": {
+          "type": "string"
+        },
+        "validationStatus": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "objectiveItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "name",
+        "source",
+        "label"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "src",
+        "name",
+        "canvaUrl"
+      ],
+      "properties": {
+        "src": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "canvaUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "format",
+        "label",
+        "src"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "src": {
+          "type": "string"
+        }
+      }
+    },
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "formats",
+        "structure",
+        "generic",
+        "canvaUrl",
+        "assets"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "formats": {
+          "type": "string"
+        },
+        "structure": {
+          "type": "string"
+        },
+        "generic": {
+          "type": "boolean"
+        },
+        "canvaUrl": {
+          "type": "string"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/asset"
+          }
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "channel",
+        "otherChannel",
+        "format",
+        "budgetAllocated",
+        "runStartDate",
+        "runEndDate",
+        "visual",
+        "copy",
+        "publicUrl",
+        "externalId",
+        "templateCampaignId",
+        "templateId",
+        "templateAssetId"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "otherChannel": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "budgetAllocated": {
+          "type": "string"
+        },
+        "runStartDate": {
+          "type": "string"
+        },
+        "runEndDate": {
+          "type": "string"
+        },
+        "visual": {
+          "$ref": "#/$defs/visual"
+        },
+        "copy": {
+          "type": "string"
+        },
+        "publicUrl": {
+          "type": "string"
+        },
+        "externalId": {
+          "type": "string"
+        },
+        "templateCampaignId": {
+          "type": "string"
+        },
+        "templateId": {
+          "type": "string"
+        },
+        "templateAssetId": {
+          "type": "string"
+        }
+      }
+    },
+    "activationKpi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "enabled",
+        "name",
+        "target",
+        "result",
+        "source",
+        "collection"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "collection": {
+          "type": "string"
+        }
+      }
+    },
+    "fundingSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "label",
+        "amount"
+      ],
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/catalogRef"
+        },
+        "label": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        }
+      }
+    },
+    "frameworkDeliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "format",
+        "content"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
+    "post": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "body",
+        "cta"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "cta": {
+          "type": "string"
+        }
+      }
+    },
+    "headline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "headline",
+        "support",
+        "cta"
+      ],
+      "properties": {
+        "headline": {
+          "type": "string"
+        },
+        "support": {
+          "type": "string"
+        },
+        "cta": {
+          "type": "string"
+        }
+      }
+    },
+    "videoConcept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "duration",
+        "narrative",
+        "closing"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "string"
+        },
+        "narrative": {
+          "type": "string"
+        },
+        "closing": {
+          "type": "string"
+        }
+      }
+    },
+    "applicationExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context",
+        "fixed",
+        "adaptation"
+      ],
+      "properties": {
+        "context": {
+          "type": "string"
+        },
+        "fixed": {
+          "type": "string"
+        },
+        "adaptation": {
+          "type": "string"
+        }
+      }
+    },
+    "campaignKpi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "baseline",
+        "target",
+        "source"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "baseline": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "activationExampleDirection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "purpose",
+        "channels",
+        "metrics"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "string"
+        },
+        "metrics": {
+          "type": "string"
+        }
+      }
+    },
+    "activationExampleRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "period",
+        "owner",
+        "budget",
+        "status",
+        "result"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "period": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "budget": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        }
+      }
+    },
+    "activationExamples": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "directions",
+        "simulatedRows"
+      ],
+      "properties": {
+        "directions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/activationExampleDirection"
+          }
+        },
+        "simulatedRows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/activationExampleRow"
+          }
+        }
+      }
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalKey",
+        "campaignFamilyExternalKey",
+        "supersedesCampaignExternalKey",
+        "title",
+        "accent",
+        "campaignType",
+        "parentCampaignExternalKey",
+        "pillar",
+        "seasonalityType",
+        "seasonalityMonths",
+        "seasonalityNote",
+        "status",
+        "version",
+        "responsible",
+        "programPrimaryCode",
+        "programSecondaryCodes",
+        "objectivePrimaryCode",
+        "objectiveSecondaryCodes",
+        "marketingObjective",
+        "directResult",
+        "strategicContribution",
+        "primaryAudienceSegment",
+        "primaryAudienceDescription",
+        "secondaryAudienceSegments",
+        "centralIdea",
+        "promise",
+        "mainMessage",
+        "secondaryMessages",
+        "tone",
+        "insight",
+        "valueProposition",
+        "products",
+        "productsIntro",
+        "productCondition",
+        "channels",
+        "ctas",
+        "prPartnerships",
+        "storytellingDirections",
+        "fixedElements",
+        "adaptableElements",
+        "adaptationLimits",
+        "frameworkDeliverables",
+        "deliverableIntro",
+        "mockups",
+        "posts",
+        "headlines",
+        "videoConcepts",
+        "applicationExamples",
+        "kpiDefinitions",
+        "activationExamples",
+        "noVisualsNote",
+        "sourceFile",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "externalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "campaignFamilyExternalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supersedesCampaignExternalKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accent": {
+          "type": "string"
+        },
+        "campaignType": {
+          "$ref": "#/$defs/catalogRef"
+        },
+        "parentCampaignExternalKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pillar": {
+          "$ref": "#/$defs/catalogRef"
+        },
+        "seasonalityType": {
+          "$ref": "#/$defs/catalogRef"
+        },
+        "seasonalityMonths": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12
+          },
+          "uniqueItems": true
+        },
+        "seasonalityNote": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/catalogRef"
+        },
+        "version": {
+          "type": "string"
+        },
+        "responsible": {
+          "type": "string"
+        },
+        "programPrimaryCode": {
+          "type": "string"
+        },
+        "programSecondaryCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "objectivePrimaryCode": {
+          "type": "string"
+        },
+        "objectiveSecondaryCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "marketingObjective": {
+          "type": "string"
+        },
+        "directResult": {
+          "type": "string"
+        },
+        "strategicContribution": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "primaryAudienceSegment": {
+          "$ref": "#/$defs/catalogRef"
+        },
+        "primaryAudienceDescription": {
+          "type": "string"
+        },
+        "secondaryAudienceSegments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogRef"
+          }
+        },
+        "centralIdea": {
+          "type": "string"
+        },
+        "promise": {
+          "type": "string"
+        },
+        "mainMessage": {
+          "type": "string"
+        },
+        "secondaryMessages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tone": {
+          "type": "string"
+        },
+        "insight": {
+          "type": "string"
+        },
+        "valueProposition": {
+          "type": "string"
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "productsIntro": {
+          "type": "string"
+        },
+        "productCondition": {
+          "type": "string"
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ctas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogRef"
+          }
+        },
+        "prPartnerships": {
+          "type": "string"
+        },
+        "storytellingDirections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fixedElements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "adaptableElements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "adaptationLimits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "frameworkDeliverables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/frameworkDeliverable"
+          }
+        },
+        "deliverableIntro": {
+          "type": "string"
+        },
+        "mockups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/template"
+          }
+        },
+        "posts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/post"
+          }
+        },
+        "headlines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/headline"
+          }
+        },
+        "videoConcepts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/videoConcept"
+          }
+        },
+        "applicationExamples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/applicationExample"
+          }
+        },
+        "kpiDefinitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/campaignKpi"
+          }
+        },
+        "activationExamples": {
+          "$ref": "#/$defs/activationExamples"
+        },
+        "noVisualsNote": {
+          "type": "string"
+        },
+        "sourceFile": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalKey",
+        "campaignExternalKey",
+        "title",
+        "startDate",
+        "endDate",
+        "status",
+        "responsible",
+        "plannedBudget",
+        "actualSpend",
+        "implementationMode",
+        "implementationPartners",
+        "fundingSources",
+        "includeAnnualPlan",
+        "objective",
+        "audiences",
+        "products",
+        "zone",
+        "message",
+        "landingUrl",
+        "materials",
+        "kpis",
+        "resultSummary",
+        "whatWorked",
+        "recommendation",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "externalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "campaignExternalKey": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startDate": {
+          "type": "string"
+        },
+        "endDate": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/catalogRef"
+        },
+        "responsible": {
+          "type": "string"
+        },
+        "plannedBudget": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "actualSpend": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "implementationMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/catalogRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "implementationPartners": {
+          "type": "string"
+        },
+        "fundingSources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fundingSource"
+          }
+        },
+        "includeAnnualPlan": {
+          "type": "boolean"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/catalogRef"
+          }
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "zone": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "landingUrl": {
+          "type": "string"
+        },
+        "materials": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/material"
+          }
+        },
+        "kpis": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/activationKpi"
+          }
+        },
+        "resultSummary": {
+          "type": "string"
+        },
+        "whatWorked": {
+          "type": "string"
+        },
+        "recommendation": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "pillar": {
+          "$ref": "#/$defs/catalogRef"
+        }
+      }
+    },
+    "annualPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalKey",
+        "year",
+        "selectedCampaignExternalKeys"
+      ],
+      "properties": {
+        "externalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "year": {
+          "type": "integer",
+          "minimum": 2000,
+          "maximum": 2100
+        },
+        "selectedCampaignExternalKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "packageMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packageId",
+        "generatedAt",
+        "purpose",
+        "source",
+        "application"
+      ],
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "purpose": {
+          "enum": [
+            "DEMO_SEED",
+            "INITIAL_IMPORT",
+            "UPDATE",
+            "AD_HOC"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "application": {
+          "const": "OMD Valea Jiului – Sistem digital de marketing"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "strategyVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalKey",
+        "label",
+        "periodStartYear",
+        "periodEndYear"
+      ],
+      "properties": {
+        "externalKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "periodStartYear": {
+          "type": "integer",
+          "minimum": 2000,
+          "maximum": 2100
+        },
+        "periodEndYear": {
+          "type": "integer",
+          "minimum": 2000,
+          "maximum": 2100
+        }
+      }
+    }
+  }
+}

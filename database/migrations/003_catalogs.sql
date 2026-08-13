@@ -1,0 +1,225 @@
+-- OMD Valea Jiului migration: Editable master data (10 catalogs)
+-- Generated verbatim from 02_DATABASE/MYSQL_SCHEMA_BLUEPRINT.sql
+-- (sha256 d76b645f05c47707e9edba44cf922dad36b95341ea2b22ea59969c3f402978f4).
+-- Do not edit in place: schema changes go into a new numbered migration.
+
+CREATE TABLE campaign_types (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_campaign_types_code (code),
+  KEY idx_campaign_types_active (is_active, sort_order),
+  CONSTRAINT fk_campaign_types_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_campaign_types_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_campaign_types_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_campaign_types_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE campaign_statuses (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_campaign_statuses_code (code),
+  KEY idx_campaign_statuses_active (is_active, sort_order),
+  CONSTRAINT fk_campaign_statuses_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_campaign_statuses_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_campaign_statuses_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_campaign_statuses_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE audience_segments (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_audience_segments_code (code),
+  KEY idx_audience_segments_active (is_active, sort_order),
+  CONSTRAINT fk_audience_segments_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_audience_segments_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_audience_segments_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_audience_segments_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE cta_types (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_cta_types_code (code),
+  KEY idx_cta_types_active (is_active, sort_order),
+  CONSTRAINT fk_cta_types_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_cta_types_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_cta_types_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_cta_types_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE product_catalog (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_product_catalog_code (code),
+  KEY idx_product_catalog_active (is_active, sort_order),
+  CONSTRAINT fk_product_catalog_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_product_catalog_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_product_catalog_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_product_catalog_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE channel_catalog (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_channel_catalog_code (code),
+  KEY idx_channel_catalog_active (is_active, sort_order),
+  CONSTRAINT fk_channel_catalog_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_channel_catalog_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_channel_catalog_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_channel_catalog_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE seasonality_types (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_seasonality_types_code (code),
+  KEY idx_seasonality_types_active (is_active, sort_order),
+  CONSTRAINT fk_seasonality_types_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_seasonality_types_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_seasonality_types_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_seasonality_types_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE activation_channels (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_activation_channels_code (code),
+  UNIQUE KEY uq_activation_channels_label (label),
+  KEY idx_activation_channels_active (is_active, sort_order),
+  CONSTRAINT fk_activation_channels_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_activation_channels_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_activation_channels_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_activation_channels_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE implementation_modes (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_implementation_modes_code (code),
+  KEY idx_implementation_modes_active (is_active, sort_order),
+  CONSTRAINT fk_implementation_modes_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_implementation_modes_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_implementation_modes_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_implementation_modes_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE funding_types (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(64) NOT NULL,
+  label VARCHAR(255) NOT NULL,
+  display_label VARCHAR(255) NULL,
+  hint TEXT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  updated_by CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_funding_types_code (code),
+  KEY idx_funding_types_active (is_active, sort_order),
+  CONSTRAINT fk_funding_types_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT fk_funding_types_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_funding_types_active CHECK (is_active IN (0,1)),
+  CONSTRAINT chk_funding_types_system CHECK (is_system IN (0,1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
