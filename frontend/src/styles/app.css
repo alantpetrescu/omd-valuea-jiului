@@ -327,3 +327,36 @@
   display: block;
   margin-top: 2px;
 }
+
+/* Deletion controls: destructive action reads as destructive, and a blocked
+   delete explains itself instead of failing on click. */
+.btn.ghost.danger {
+  color: var(--danger);
+  border-color: #e4c4c4;
+}
+
+.btn.ghost.danger:hover {
+  background: #fcf2f2;
+}
+
+.delete-blocked {
+  display: grid;
+  gap: 2px;
+  max-width: 320px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--soft);
+  font: var(--fs-meta) / 1.4 var(--sans);
+}
+
+.delete-blocked small {
+  color: var(--faint);
+}
+
+.page-head .actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

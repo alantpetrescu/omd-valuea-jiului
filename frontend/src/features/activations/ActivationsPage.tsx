@@ -19,6 +19,7 @@ import {
   getTemporalSituationClass,
 } from '../../domain/services';
 import { useCampaigns, useCatalogs, EMPTY_FILTERS } from '../campaigns/useCampaigns';
+import { useAuth } from '../auth/AuthContext';
 import {
   EMPTY_ACTIVATION_FILTERS,
   useActivationStats,
@@ -130,6 +131,8 @@ function ActivationRow({ item }: { item: ActivationListItem }) {
 }
 
 export function ActivationsPage() {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const [filters, setFilters] = useState<ActivationFilters>(EMPTY_ACTIVATION_FILTERS);
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [year, setYear] = useState(new Date().getFullYear());
@@ -163,11 +166,13 @@ export function ActivationsPage() {
             în Planul anual.
           </p>
         </div>
-        <div className="actions">
-          <Link className="btn primary" to="/activations/new">
-            ＋ Activare nouă
-          </Link>
-        </div>
+        {canEdit ? (
+          <div className="actions">
+            <Link className="btn primary" to="/activations/new">
+              ＋ Activare nouă
+            </Link>
+          </div>
+        ) : null}
       </header>
 
       <section className="activation-stats">

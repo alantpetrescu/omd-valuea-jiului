@@ -68,10 +68,71 @@ Health check: `GET http://localhost:3000/api/v1/health` → `{"status":"ok"}`.
 - [x] Stage 1 step 2 — database layer (pool, typed queries, transactions)
 - [x] Stage 1 step 3 — migrations from the SQL blueprint (40 tables + 1 view verified)
 - [x] Stage 1 step 4 — technical seed (roles, admin, SystemMasterRegistry)
-- [ ] Stage 1 step 5 — API envelopes, error handling, logging
-- [ ] Stage 1 step 6 — auth, permissions, audit
+- [x] Stage 1 step 5 — API envelopes, error handling, logging
+- [x] Stage 1 step 6 — auth, permissions, audit
 - [x] Stage 2 (partial) — import service for all four package types, CLI entry point
-- [ ] Stage 2 — preview endpoint, HTTP import endpoints (ADMIN only), Campaign/Activation read API
+- [x] Stage 2 (partial) — Campaign read API, Login page, Campanii page
+- [x] Stage 2 (partial) — Campaign detail page (all 8 sections, template visuals)
+- [x] Stage 2 (partial) — campaign write API (create/update, ETag concurrency, audit)
+- [x] Stage 2 (partial) — campaign create/edit wizard, 8 steps
+- [ ] Stage 2 — template visual upload from the wizard (see below)
+- [x] Stage 2 (partial) — Activări list + detail + calendar
+- [x] Stage 2 (partial) — activation write API and editor (create/edit)
+- [x] Stage 3 — Plan anual (read + manual selection)
+- [x] Stage 4 — Monitorizare activări and Monitorizare reputație
+- [x] Stage 5 — Repere strategice (read + ADMIN edit, version activation)
+- [x] Stage 5 — Administrare: users, catalogs with deletion policy, imports, audit
+- [x] Stage 5 — soft delete with dependency checks, change password, About
+- [ ] Stage 2 — preview/commit import endpoints (ADMIN only)
+
+## Deployment on a tailnet
+
+```bash
+cp .env.docker.example .env.docker      # fill in TS_AUTHKEY, DB_*, secrets
+docker compose --env-file .env.docker up -d --build
+docker compose run --rm api node dist/database/migrate.js
+docker compose run --rm api node dist/database/seed-technical.js
+```
+
+Three containers: `tailscale` (joins the tailnet, terminates HTTPS via Tailscale
+Serve), `web` (nginx: SPA + `/api` proxy + `/uploads`), `api` (Express).
+`web` and `api` share the tailscale network namespace, so they address each
+other over `127.0.0.1` and only tailscale publishes ports.
+
+The app is then reachable at its MagicDNS name over HTTPS, from the tailnet only
+— Serve, not Funnel. Switching to Funnel would publish it to the internet.
+
+**The database is not part of this stack.** It must be reachable from the
+tailscale namespace: a host address, another tailnet node, or a managed server.
+A plain compose service addressed by name will not resolve.
+
+Generate the two secrets with `openssl rand -hex 32`. Changing `AUTH_SECRET`
+invalidates every existing session.
+
+## Test accounts
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@omd.ro` | `OMD-ValeaJiului-2026` | ADMIN |
+| `editor@omd.ro` | `Editor-Test-2026` | EDITOR |
+| `viewer@omd.ro` | `Viewer-Test-2026` | VIEWER |
+
+The two non-admin accounts exist to exercise the permission matrix; remove them
+before production. Verified: VIEWER gets 403 on write, 200 on read.
+
+## Running it
+
+```bash
+# terminal 1
+cd backend && npm run dev      # API on http://localhost:3000
+
+# terminal 2
+cd frontend && npm run dev     # UI  on http://localhost:5173
+```
+
+The Vite dev server proxies `/api` and `/uploads` to the backend, so the browser
+sees a single origin — the same arrangement production uses behind a reverse
+proxy, and the reason the session cookie works without CORS.
 
 ## Staging seed
 

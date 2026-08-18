@@ -1,0 +1,18 @@
+{
+  "//": "Tailscale Serve: terminate HTTPS on the tailnet with a MagicDNS cert and forward to nginx. ${TS_CERT_DOMAIN} is substituted by the tailscale container at start-up. Change Serve to Funnel only if the app must be reachable from the public internet — this one should stay tailnet-only.",
+  "TCP": {
+    "443": {
+      "HTTPS": true
+    }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:8080"
+        }
+      }
+    }
+  },
+  "AllowFunnel": {}
+}

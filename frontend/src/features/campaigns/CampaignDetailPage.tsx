@@ -9,6 +9,8 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../auth/AuthContext';
+import { DeleteButton } from '../../components/DeleteButton';
 
 interface Mockup {
   id: string;
@@ -198,6 +200,8 @@ function MockupCard({
 
 export function CampaignDetailPage() {
   const { externalKey = '' } = useParams();
+  const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [activations, setActivations] = useState<CampaignActivation[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -241,11 +245,19 @@ export function CampaignDetailPage() {
             {campaign.type} · {campaign.pillar} · {campaign.strategyVersionLabel}
           </p>
         </div>
-        <div className="actions">
-          <Link className="btn primary" to={`/campaigns/${campaign.id}/edit`}>
-            Editează campania
-          </Link>
-        </div>
+        {canEdit ? (
+          <div className="actions">
+            <Link className="btn primary" to={`/campaigns/${campaign.id}/edit`}>
+              Editează campania
+            </Link>
+            <DeleteButton
+              resource="campaigns"
+              externalKey={campaign.id}
+              label={campaign.title}
+              redirectTo="/campaigns"
+            />
+          </div>
+        ) : null}
       </header>
 
       <div className="campaign-full-view">

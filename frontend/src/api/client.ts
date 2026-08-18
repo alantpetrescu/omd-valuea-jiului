@@ -91,4 +91,5 @@ export const api = {
       body: body === undefined ? undefined : JSON.stringify(body),
       headers,
     }),
+  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };

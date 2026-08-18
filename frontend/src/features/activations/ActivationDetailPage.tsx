@@ -9,6 +9,8 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../auth/AuthContext';
+import { DeleteButton } from '../../components/DeleteButton';
 import {
   formatDate,
   formatDateTime,
@@ -47,6 +49,8 @@ interface ActivationDetail extends ActivationListItem {
 
 export function ActivationDetailPage() {
   const { externalKey = '' } = useParams();
+  const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const [activation, setActivation] = useState<ActivationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,11 +103,19 @@ export function ActivationDetailPage() {
             ) : null}
           </p>
         </div>
-        <div className="actions">
-          <Link className="btn primary" to={`/activations/${activation.id}/edit`}>
-            Editează activarea
-          </Link>
-        </div>
+        {canEdit ? (
+          <div className="actions">
+            <Link className="btn primary" to={`/activations/${activation.id}/edit`}>
+              Editează activarea
+            </Link>
+            <DeleteButton
+              resource="activations"
+              externalKey={activation.id}
+              label={activation.title}
+              redirectTo="/activations"
+            />
+          </div>
+        ) : null}
       </header>
 
       <section className="activation-stats">

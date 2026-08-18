@@ -9,3 +9,6 @@ storage/uploads/*
 storage/import-temp/*
 !storage/uploads/.gitkeep
 !storage/import-temp/.gitkeep
+
+# Deployment secrets
+.env.docker

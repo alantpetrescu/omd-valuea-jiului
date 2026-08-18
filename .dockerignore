@@ -1,0 +1,18 @@
+# Never ship secrets or local state into an image.
+**/.env
+**/.env.local
+.env.docker
+
+**/node_modules
+**/dist
+.git
+.gitignore
+
+# Runtime data belongs in volumes, not in the image.
+storage/uploads/*
+storage/import-temp/*
+
+# Reference material and docs are not needed at runtime.
+docs/
+*.md
+!README_IMPLEMENTATION.md

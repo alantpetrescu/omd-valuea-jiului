@@ -96,6 +96,51 @@ export function placeholders(values: readonly unknown[]): string {
   return values.length === 0 ? 'NULL' : values.map(() => '?').join(', ');
 }
 
+/**
+ * Builds `LIMIT n OFFSET m`.
+ *
+ * MySQL's prepared-statement protocol rejects placeholders in LIMIT/OFFSET —
+ * `LIMIT ? OFFSET ?` fails with "Incorrect arguments to mysqld_stmt_execute".
+ * The values are therefore inlined, but only after being forced to
+ * non-negative integers here, so no caller can reach the clause with a string.
+ * This is the single sanctioned place where a value enters SQL as a literal.
+ */
+export function limitClause(limit: number, offset: number): string {
+  const safeLimit = Math.max(0, Math.trunc(Number(limit) || 0));
+  const safeOffset = Math.max(0, Math.trunc(Number(offset) || 0));
+  return `LIMIT ${safeLimit} OFFSET ${safeOffset}`;
+}
+
+/**
+ * Dash characters that users type interchangeably.
+ *
+ * Editorial text arrives from Word and design tools full of en dashes (–) and
+ * em dashes (—), while people search with the hyphen on their keyboard (-).
+ * `LIKE` compares codepoints, so "Valea Jiului -" would never match
+ * "Valea Jiului – Poarta Sudică". The collation already handles case and
+ * diacritics; dashes it does not.
+ */
+const DASH_VARIANTS = ['–', '—', '‑', '−'];
+
+/** Folds every dash variant to a plain hyphen, for the JS side of a search. */
+export function normalizeDashes(value: string): string {
+  return DASH_VARIANTS.reduce((text, dash) => text.split(dash).join('-'), value);
+}
+
+/**
+ * Wraps a column so it compares dash-insensitively.
+ * `dashInsensitive('c.title')` -> `REPLACE(REPLACE(...))`.
+ *
+ * This defeats index usage, but a leading-wildcard LIKE could not use an index
+ * anyway, so nothing is lost.
+ */
+export function dashInsensitive(column: string): string {
+  return DASH_VARIANTS.reduce(
+    (expression, dash) => `REPLACE(${expression}, '${dash}', '-')`,
+    column,
+  );
+}
+
 /** MySQL error codes that repositories translate into business responses. */
 export const MYSQL_ERROR = {
   DUPLICATE_ENTRY: 'ER_DUP_ENTRY',

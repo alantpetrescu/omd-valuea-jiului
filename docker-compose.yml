@@ -1,0 +1,104 @@
+# OMD Valea Jiului — deployment on a tailnet.
+#
+#   tailscale   joins the tailnet, terminates HTTPS, forwards to nginx
+#   web         nginx: serves the SPA, proxies /api, serves /uploads
+#   api         Express + MySQL client
+#
+# `web` and `api` share the tailscale container's network namespace, which is
+# the arrangement Tailscale documents for sidecars. Consequences worth knowing:
+#   - the three containers talk to each other over 127.0.0.1, not by name;
+#   - only tailscale declares ports;
+#   - MySQL must be reachable from that namespace — a host database, another
+#     tailnet node, or a managed server. It cannot be a plain compose service
+#     addressed by name.
+#
+# Bring it up with:
+#   docker compose --env-file .env.docker up -d --build
+#   docker compose run --rm api node dist/database/migrate.js
+#   docker compose run --rm api node dist/database/seed-technical.js
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: omd-tailscale
+    hostname: ${TS_HOSTNAME:-omd-valea-jiului}
+    restart: unless-stopped
+    environment:
+      # Use a reusable, ephemeral-off auth key or an OAuth client secret.
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in .env.docker}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "false"
+      TS_EXTRA_ARGS: --accept-dns=true
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./deploy/tailscale-serve.json:/config/serve.json:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      target: api
+    image: omd-valea-jiului-api:latest
+    container_name: omd-api
+    restart: unless-stopped
+    # Shares the tailnet namespace; reachable from nginx at 127.0.0.1:3000.
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_started
+    environment:
+      APP_ENV: production
+      APP_BASE_URL: ${APP_BASE_URL:?e.g. https://omd-valea-jiului.tailXXXX.ts.net}
+      APP_SECRET: ${APP_SECRET:?generate a long random value}
+      AUTH_SECRET: ${AUTH_SECRET:?generate a long random value}
+      AUTH_TOKEN_TTL: ${AUTH_TOKEN_TTL:-28800}
+
+      DB_HOST: ${DB_HOST:?database host reachable from the tailnet namespace}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-omd_vj_production}
+      DB_USER: ${DB_USER:?}
+      DB_PASSWORD: ${DB_PASSWORD:?}
+
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-15}
+      MAX_JSON_IMPORT_MB: ${MAX_JSON_IMPORT_MB:-25}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # nginx sits in front, so honour X-Forwarded-* for client IP and for the
+      # Secure-cookie decision.
+      TRUST_PROXY: "1"
+
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@omd.ro}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Administrator OMD}
+    volumes:
+      - uploads:/data/uploads
+      - import-temp:/data/import-temp
+
+  web:
+    build:
+      context: .
+      target: web
+    image: omd-valea-jiului-web:latest
+    container_name: omd-web
+    restart: unless-stopped
+    network_mode: service:tailscale
+    depends_on:
+      - api
+    volumes:
+      # Read-only: nginx serves the visuals, only the API writes them.
+      - uploads:/data/uploads:ro
+
+volumes:
+  tailscale-state:
+  uploads:
+  import-temp:

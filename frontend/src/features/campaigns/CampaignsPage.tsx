@@ -13,6 +13,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { useAuth } from '../auth/AuthContext';
+
 import {
   EMPTY_FILTERS,
   useCampaigns,
@@ -32,7 +34,7 @@ function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
-function CampaignCard({ item }: { item: CampaignListItem }) {
+function CampaignCard({ item, canEdit }: { item: CampaignListItem; canEdit: boolean }) {
   const summary = item.mainMessage || item.marketingObjective || '';
   const audience = item.primaryAudienceSegment || item.primaryAudienceDescription || 'De completat';
 
@@ -63,15 +65,19 @@ function CampaignCard({ item }: { item: CampaignListItem }) {
         <Link className="btn secondary" to={`/campaigns/${item.id}`}>
           Deschide campania
         </Link>
-        <Link className="btn primary" to={`/activations/new?campaign=${item.id}`}>
-          ＋ Activare
-        </Link>
+        {canEdit ? (
+          <Link className="btn primary" to={`/activations/new?campaign=${item.id}`}>
+            ＋ Activare
+          </Link>
+        ) : null}
       </div>
     </article>
   );
 }
 
 export function CampaignsPage() {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const [filters, setFilters] = useState<CampaignFilters>(EMPTY_FILTERS);
   const [view, setView] = useState<'cards' | 'list'>('cards');
   const { items, meta, loading, error } = useCampaigns(filters);
@@ -105,11 +111,13 @@ export function CampaignsPage() {
             campanii tactice sezoniere.
           </p>
         </div>
-        <div className="actions">
-          <Link className="btn primary" to="/campaigns/new">
-            ＋ Campanie nouă
-          </Link>
-        </div>
+        {canEdit ? (
+          <div className="actions">
+            <Link className="btn primary" to="/campaigns/new">
+              ＋ Campanie nouă
+            </Link>
+          </div>
+        ) : null}
       </header>
 
       <section className="stats">
@@ -226,7 +234,7 @@ export function CampaignsPage() {
       {!loading && !error ? (
         <section className={view === 'list' ? 'grid list' : 'grid'}>
           {items.length > 0 ? (
-            items.map((item) => <CampaignCard key={item.id} item={item} />)
+            items.map((item) => <CampaignCard key={item.id} item={item} canEdit={canEdit} />)
           ) : (
             <div className="empty">
               <b>Nu am găsit campanii</b>

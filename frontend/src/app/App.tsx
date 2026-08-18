@@ -15,18 +15,27 @@ import { CampaignWizard } from '../features/campaigns/CampaignWizard';
 import { ActivationsPage } from '../features/activations/ActivationsPage';
 import { ActivationDetailPage } from '../features/activations/ActivationDetailPage';
 import { ActivationEditor } from '../features/activations/ActivationEditor';
+import { AnnualPlanPage } from '../features/annual-plan/AnnualPlanPage';
+import { MonitoringActivationsPage } from '../features/monitoring/MonitoringActivationsPage';
+import { MonitoringReputationPage } from '../features/monitoring/MonitoringReputationPage';
+import { StrategyPage } from '../features/strategy/StrategyPage';
+import { AdminPage } from '../features/admin/AdminPage';
+import { AboutPage } from '../features/about/AboutPage';
+import { ChangePasswordPage } from '../features/auth/ChangePasswordPage';
 import { AppShell } from './AppShell';
 
-function Placeholder({ title }: { title: string }) {
-  return (
-    <section className="about-intro">
-      <h2>{title}</h2>
-      <p>Acest modul va fi implementat într-o etapă următoare.</p>
-    </section>
-  );
-}
-
 function AuthenticatedRoutes() {
+  const { user } = useAuth();
+
+  // A temporary password must be replaced before the app is usable (spec 11.5).
+  if (user?.mustChangePassword) {
+    return (
+      <AppShell>
+        <ChangePasswordPage />
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <Routes>
@@ -35,16 +44,17 @@ function AuthenticatedRoutes() {
         <Route path="/campaigns/new" element={<CampaignWizard />} />
         <Route path="/campaigns/:externalKey/edit" element={<CampaignWizard />} />
         <Route path="/campaigns/:externalKey" element={<CampaignDetailPage />} />
-        <Route path="/strategic" element={<Placeholder title="Repere strategice" />} />
+        <Route path="/strategic" element={<StrategyPage />} />
         <Route path="/activations" element={<ActivationsPage />} />
         <Route path="/activations/new" element={<ActivationEditor />} />
         <Route path="/activations/:externalKey/edit" element={<ActivationEditor />} />
         <Route path="/activations/:externalKey" element={<ActivationDetailPage />} />
-        <Route path="/annual" element={<Placeholder title="Plan anual" />} />
-        <Route path="/monitoring-activations" element={<Placeholder title="Monitorizare activări" />} />
-        <Route path="/monitoring-reputation" element={<Placeholder title="Monitorizare reputație" />} />
-        <Route path="/about" element={<Placeholder title="Despre aplicație" />} />
-        <Route path="/admin" element={<Placeholder title="Administrare" />} />
+        <Route path="/annual" element={<AnnualPlanPage />} />
+        <Route path="/monitoring-activations" element={<MonitoringActivationsPage />} />
+        <Route path="/monitoring-reputation" element={<MonitoringReputationPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/change-password" element={<ChangePasswordPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         {/* After login the user lands in the operational area (spec 11.7). */}
         <Route path="*" element={<Navigate to="/campaigns" replace />} />
       </Routes>

@@ -7,7 +7,7 @@
  * rather than a separate backoffice.
  */
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 
 import { ROLE_LABELS, useAuth } from '../features/auth/AuthContext';
 
@@ -76,6 +76,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <b>{user ? initials(user.name) : 'OMD'}</b>
               <span>{user ? ROLE_LABELS[user.role] : ''}</span>
             </div>
+            <Link className="btn secondary" to="/change-password">
+              Schimbă parola
+            </Link>
             <button className="btn secondary" type="button" onClick={() => void logout()}>
               Deconectare
             </button>
