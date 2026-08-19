@@ -10,7 +10,7 @@
  *     year the period touches, which is why the hint mentions the years.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { api, ApiError } from '../../api/client';
 import {
@@ -175,6 +175,18 @@ export function ActivationEditor() {
   const { externalKey } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  /**
+   * Where to return when the editor closes.
+   *
+   * An activation started from the campaigns page belongs to that errand, so
+   * it hands back there rather than dropping the reader into Activari, which
+   * is a page they never asked for. Callers mark the origin with router state;
+   * without it the editor behaves as before.
+   */
+  const returnTo = (location.state as { from?: string } | null)?.from ?? null;
+
   const isEdit = Boolean(externalKey);
 
   const catalogs = useCatalogs();
@@ -446,10 +458,10 @@ export function ActivationEditor() {
         await api.put(`/activations/${encodeURIComponent(externalKey!)}`, payload, {
           'If-Match': `"${version ?? 0}"`,
         });
-        navigate(`/activations/${externalKey}`);
+        navigate(returnTo ?? `/activations/${externalKey}`);
       } else {
         const created = await api.post<{ id: string }>('/activations', payload);
-        navigate(`/activations/${created.data.id}`);
+        navigate(returnTo ?? `/activations/${created.data.id}`);
       }
     } catch (caught) {
       setMessage(caught instanceof ApiError ? caught.message : 'Activarea nu a putut fi salvată.');
@@ -499,7 +511,7 @@ export function ActivationEditor() {
             <button
               className="x"
               type="button"
-              onClick={() => navigate('/activations')}
+              onClick={() => navigate(returnTo ?? '/activations')}
               aria-label="Închide"
             >
               ×
@@ -1627,7 +1639,7 @@ export function ActivationEditor() {
             Datele sunt păstrate când navighezi între taburi
           </div>
           <div>
-            <button className="btn secondary" type="button" onClick={() => navigate('/activations')}>
+            <button className="btn secondary" type="button" onClick={() => navigate(returnTo ?? '/activations')}>
               Renunță
             </button>{' '}
             <button

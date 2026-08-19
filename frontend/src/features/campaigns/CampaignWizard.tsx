@@ -244,18 +244,73 @@ export function CampaignWizard() {
   const isUmbrella = typeLabel.includes('umbrelă');
   const isTactical = typeLabel.includes('tactică');
 
-  const close = () => navigate(isEdit ? `/campaigns/${externalKey}` : '/campaigns');
+  /**
+   * Leaving the wizard always lands on the campaigns list, never on the
+   * detail route. Campaigns are read through the drawer on that page, so
+   * `/campaigns/<key>` is a place you pass through rather than one to be
+   * left standing in.
+   */
+  const close = () => navigate('/campaigns');
 
   /**
-   * Which sections were seeded from another campaign, and what they held before
-   * the *first* such import.
+   * CTAs created from inside the wizard.
    *
-   * Re-importing over an existing import keeps the original snapshot, so "Șterge
-   * ce a fost preluat" always returns to what you actually typed rather than to
-   * the previous import. That is the prototype's `contextImports[kind].before`.
+   * `useCatalogs` fetches once on mount and has no refresh, so a freshly created
+   * row would not appear in "CTA-uri orientative" until a reload. Holding it
+   * here and concatenating is enough: the next page load reads it from the
+   * database like any other entry.
+   */
+  const [newCtas, setNewCtas] = useState<CatalogEntry[]>([]);
+  const ctaOptions = [...(catalogs?.cta_types ?? []), ...newCtas];
+
+  /** Catalogue code from a label: unaccented, uppercase, underscore-separated. */
+  const codeFromLabel = (label: string): string =>
+    label
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 40) || 'CTA';
+
+  const createCta = async (label: string): Promise<string | null> => {
+    const base = codeFromLabel(label);
+    // A colliding code is not an error worth surfacing — try a few suffixes.
+    for (const code of [base, `${base}_2`, `${base}_3`]) {
+      try {
+        await api.post('/admin/catalogs/cta_types', {
+          code,
+          label,
+          displayLabel: label,
+          hint: null,
+          sortOrder: 900,
+        });
+        setNewCtas((current) => [...current, { code, label, displayLabel: label, hint: null }]);
+        setMessage(null);
+        return code;
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.code === 'CONFLICT') continue;
+        setMessage(
+          caught instanceof ApiError && caught.status === 403
+            ? 'CTA-ul a fost adăugat doar în această campanie. Extinderea nomenclatorului de CTA-uri este permisă doar administratorilor.'
+            : 'CTA-ul nu a putut fi adăugat în nomenclator; rămâne salvat doar în această campanie.',
+        );
+        return null;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * Which sections were seeded from another campaign, and exactly what the
+   * import wrote into each field.
+   *
+   * Deliberately not a snapshot of the previous values: an import overwrites,
+   * and that overwrite is final. "Sterge ce a fost preluat" therefore never
+   * resurrects what a field held beforehand - see `clearContext`.
    */
   const [imports, setImports] = useState<
-    Partial<Record<ContextSection, { title: string; before: CampaignFormState }>>
+    Partial<Record<ContextSection, { title: string; applied: Partial<CampaignFormState> }>>
   >({});
 
   /** Catalogue code for a stored label; falls back to the label itself. */
@@ -265,13 +320,12 @@ export function CampaignWizard() {
   };
 
   const applyContext = (section: ContextSection, source: CampaignDetail) => {
-    // Built from `form` rather than inside a setState updater: the snapshot must
-    // be taken exactly once, and an updater can run twice under StrictMode.
-    const current = form;
-    const next: CampaignFormState = (() => {
+    // Built outside the setState updater: the record of what was written must
+    // be made exactly once, and an updater can run twice under StrictMode.
+    const patch: Partial<CampaignFormState> = (() => {
       const audiences = catalogs?.audience_segments ?? [];
       const ctas = catalogs?.cta_types ?? [];
-      const next: CampaignFormState = { ...current };
+      const next: Partial<CampaignFormState> = {};
 
       if (section === 'public') {
         next.primaryAudienceCode = codeFor(audiences, source.primaryAudienceSegment);
@@ -341,20 +395,41 @@ export function CampaignWizard() {
       return next;
     })();
 
-    setForm(next);
-    // Snapshot only on the first import into this section, so Clear returns to
-    // what the author typed rather than to the previous import.
-    setImports((state) => ({
-      ...state,
-      [section]: { title: source.title, before: state[section]?.before ?? current },
-    }));
+    setForm((current) => ({ ...current, ...patch }));
+    // Always the latest import: re-importing replaces the record, because the
+    // previous one no longer describes what is on screen.
+    setImports((state) => ({ ...state, [section]: { title: source.title, applied: patch } }));
     setMessage(null);
   };
 
+  /**
+   * Undo an import without undoing the author's own work.
+   *
+   * A field is cleared only if it still holds exactly what the import put
+   * there. Anything edited since is left alone: the author has taken ownership
+   * of it, and discarding that would lose real work.
+   *
+   * Cleared means blank, not "the value from before the import". Once an import
+   * has overwritten a field, the previous text is gone for good - restoring it
+   * would resurrect something the author already chose to replace.
+   */
   const clearContext = (section: ContextSection) => {
     const entry = imports[section];
     if (!entry) return;
-    setForm(entry.before);
+
+    const blank = emptyForm({});
+    const identical = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+    setForm((current) => {
+      const next = { ...current };
+      for (const key of Object.keys(entry.applied) as Array<keyof CampaignFormState>) {
+        if (identical(current[key], entry.applied[key])) {
+          Object.assign(next, { [key]: blank[key] });
+        }
+      }
+      return next;
+    });
+
     setImports((state) => {
       const next = { ...state };
       delete next[section];
@@ -455,7 +530,7 @@ export function CampaignWizard() {
           // Guards against overwriting a concurrent edit (spec 18).
           'If-Match': `"${version ?? 0}"`,
         });
-        navigate(`/campaigns/${externalKey}`);
+        navigate('/campaigns');
       } else {
         const created = await api.post<{ id: string }>('/campaigns', payload);
         navigate(`/campaigns/${created.data.id}`);
@@ -558,7 +633,7 @@ export function CampaignWizard() {
 
               {step === 1 ? (
                 <>
-                  <h3>0. Identificare</h3>
+                  <h3>1. Identificare</h3>
                   <p className="intro">
                     Câmpurile principale sunt selecții simple și pot fi ajustate ulterior.
                   </p>
@@ -790,7 +865,7 @@ export function CampaignWizard() {
 
               {step === 2 ? (
                 <>
-                  <h3>1. Încadrare strategică</h3>
+                  <h3>2. Încadrare strategică</h3>
                   <p className="intro">
                     Alege relațiile strategice și formulează numai rezultate pe care campania le
                     poate influența realist.
@@ -881,7 +956,7 @@ export function CampaignWizard() {
 
               {step === 3 ? (
                 <>
-                  <h3>2. Publicuri, insight și valoare</h3>
+                  <h3>3. Publicuri, insight și valoare</h3>
                   <p className="intro">
                     Selectează rapid segmentele, apoi descrie pe scurt motivația publicului și
                     beneficiul distinct al campaniei.
@@ -952,7 +1027,7 @@ export function CampaignWizard() {
 
               {step === 4 ? (
                 <>
-                  <h3>2. Conceptul campaniei</h3>
+                  <h3>4. Conceptul campaniei</h3>
                   <p className="intro">
                     Construiește nucleul creativ. Poți porni de la exemplul cel mai apropiat și apoi
                     adapta formulările.
@@ -1034,9 +1109,10 @@ export function CampaignWizard() {
                     <div className="field full">
                       <div className="label">CTA-uri <InfoTip helpKey="cta" /></div>
                       <CtaPicker
-                        options={catalogs?.cta_types ?? []}
+                        options={ctaOptions}
                         selected={form.ctaCodes}
                         onChange={(next) => set('ctaCodes', next)}
+                        onCreate={createCta}
                       />
                     </div>
                   </div>
@@ -1045,7 +1121,7 @@ export function CampaignWizard() {
 
               {step === 5 ? (
                 <>
-                  <h3>3. Produse, canale și măsurare</h3>
+                  <h3>5. Produse, canale și măsurare</h3>
                   <p className="intro">
                     Selectează componentele relevante. Planul editorial și utilizarea concretă se
                     vor detalia ulterior, la nivel de activare.
@@ -1162,7 +1238,7 @@ export function CampaignWizard() {
 
               {step === 6 ? (
                 <>
-                  <h3>4. Reguli de utilizare și adaptare</h3>
+                  <h3>6. Reguli de utilizare și adaptare</h3>
                   <p className="intro">
                     Regulile protejează ideea campaniei și fac posibilă adaptarea ei fără
                     reconstruirea conceptului.
@@ -1281,7 +1357,7 @@ export function CampaignWizard() {
 
               {step === 7 && isUmbrella ? (
                 <>
-                  <h3>5. Livrabile de cadru ale campaniei-umbrelă</h3>
+                  <h3>7. Livrabile de cadru ale campaniei-umbrelă</h3>
                   <p className="intro">
                     Campania-umbrelă stabilește arhitectura strategică și verbală comună. Toate
                     câmpurile afișate în fișa de vizualizare pot fi actualizate aici.
@@ -1341,7 +1417,7 @@ export function CampaignWizard() {
 
               {step === 7 && !isUmbrella ? (
                 <>
-                  <h3>5. Livrabile și template-uri specifice campaniei</h3>
+                  <h3>7. Livrabile și template-uri specifice campaniei</h3>
                   <p className="intro">
                     Configurează reperele reutilizabile. În modul de editare poți modifica și
                     vizualurile asociate fiecărei machete.
@@ -1351,7 +1427,7 @@ export function CampaignWizard() {
 
                   <div className="form-grid">
                     <div className="field full">
-                      <div className="label">5.1. Headline-uri și texte <InfoTip helpKey="headlines" /></div>
+                      <div className="label">7.1. Headline-uri și texte <InfoTip helpKey="headlines" /></div>
                       <RowTable
                         rows={form.headlines}
                         columns={[
@@ -1376,7 +1452,7 @@ export function CampaignWizard() {
                     </div>
 
                     <div className="field full">
-                      <div className="label">5.2. Direcții de machete digitale <InfoTip helpKey="mockups" /></div>
+                      <div className="label">7.2. Direcții de machete digitale <InfoTip helpKey="mockups" /></div>
                       <div className="mockup-edit-list">
                         {form.mockups.map((mockup, index) => (
                           // eslint-disable-next-line react/no-array-index-key
@@ -1496,7 +1572,7 @@ export function CampaignWizard() {
                     </div>
 
                     <div className="field full">
-                      <div className="label">5.3. Exemple de postări <InfoTip helpKey="posts" /></div>
+                      <div className="label">7.3. Exemple de postări <InfoTip helpKey="posts" /></div>
                       <RowTable
                         rows={form.posts}
                         columns={[
@@ -1521,7 +1597,7 @@ export function CampaignWizard() {
                     </div>
 
                     <div className="field full">
-                      <div className="label">5.4. Concepte / scenarii video <InfoTip helpKey="videos" /></div>
+                      <div className="label">7.4. Concepte / scenarii video <InfoTip helpKey="videos" /></div>
                       <RowTable
                         rows={form.videoConcepts}
                         columns={[
@@ -1551,7 +1627,7 @@ export function CampaignWizard() {
 
               {step === 8 ? (
                 <>
-                  <h3>6. Exemple orientative de activări</h3>
+                  <h3>8. Exemple orientative de activări</h3>
                   <p className="intro">
                     Listează exemple de acțiuni care pot inspira implementarea campaniei. Nu sunt
                     tipuri obligatorii și nu sunt preluate în fișa activării.

@@ -343,17 +343,28 @@ export function AudiencePicker({
   );
 }
 
-/** The prototype's `ctaUI()` — flat chip list with free entry, capped at five. */
+/**
+ * The prototype's `ctaUI()` — flat chip list with free entry, capped at five.
+ *
+ * A typed CTA is registered in the `cta_types` nomenclator through `onCreate`,
+ * so it joins "CTA-uri orientative" and is offered to every later campaign
+ * rather than living only inside this one. The prototype had no catalogue to
+ * write to and simply kept the string locally.
+ */
 export function CtaPicker({
   options,
   selected,
   onChange,
+  onCreate,
 }: {
   options: CatalogEntry[];
   selected: string[];
   onChange: (next: string[]) => void;
+  /** Resolves to the catalogue code to select, or null if it could not be created. */
+  onCreate: (label: string) => Promise<string | null>;
 }) {
   const [custom, setCustom] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const toggle = (code: string) => {
     if (selected.includes(code)) return onChange(selected.filter((c) => c !== code));
@@ -361,11 +372,32 @@ export function CtaPicker({
     return undefined;
   };
 
-  const addCustom = () => {
+  const addCustom = async () => {
     const value = custom.trim();
-    if (!value || selected.includes(value) || selected.length >= 5) return;
-    onChange([...selected, value]);
-    setCustom('');
+    if (!value || selected.length >= 5 || busy) return;
+
+    // Already in the catalogue under this label? Select it instead of adding a
+    // duplicate row that differs only by code.
+    const existing = options.find(
+      (entry) => (entry.displayLabel ?? entry.label).toLowerCase() === value.toLowerCase(),
+    );
+    if (existing) {
+      if (!selected.includes(existing.code)) onChange([...selected, existing.code]);
+      setCustom('');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const code = await onCreate(value);
+      // A failed catalogue write still selects the text, so the author does not
+      // lose what they typed; it just is not offered to other campaigns.
+      const next = code ?? value;
+      if (!selected.includes(next)) onChange([...selected, next]);
+      setCustom('');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -415,10 +447,21 @@ export function CtaPicker({
             className="search-small"
             value={custom}
             onChange={(event) => setCustom(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void addCustom();
+              }
+            }}
             placeholder="Adaugă un CTA propriu"
           />
-          <button type="button" className="btn ghost" onClick={addCustom}>
-            Adaugă
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={busy || !custom.trim() || selected.length >= 5}
+            onClick={() => void addCustom()}
+          >
+            {busy ? 'Se adaugă…' : 'Adaugă'}
           </button>
         </div>
       </div>
@@ -466,19 +509,44 @@ export function MultiPicker({
     setCustom('');
   };
 
+  /**
+   * The suggestions, followed by anything selected that is not among them.
+   *
+   * The left box is highlighted purely by value, so a selection only lights up
+   * when its text is in the list. Values arriving from a context import are the
+   * source campaign's own free text and essentially never match a suggestion —
+   * the seeded campaigns overlap with the ten suggestions in zero places — so
+   * without this the box stayed blank after "Preia selecția" and the selection
+   * appeared to exist only on the right.
+   *
+   * Only for pickers that have a catalogue behind them. "Elemente fixe" and
+   * "Limite de adaptare" have none: synthesising a left box out of the selection
+   * would just print every value twice, side by side, with nothing to choose
+   * from. Those stay a single box.
+   */
+  const shown =
+    options.length === 0
+      ? []
+      : [
+          ...options,
+          ...selected
+            .filter((value) => !options.some((option) => option.value === value))
+            .map((value) => ({ value, hint: null })),
+        ];
+
   return (
     // Without a suggestion catalogue only the right-hand box renders, and the
     // prototype's two-column grid would leave the other half empty — the
     // modifier collapses it to one column. See app.css.
-    <div className={options.length > 0 ? 'multi-picker' : 'multi-picker single'}>
-      {options.length > 0 ? (
+    <div className={shown.length > 0 ? 'multi-picker' : 'multi-picker single'}>
+      {shown.length > 0 ? (
         <div className="pickbox">
           <div className="picktitle">
             <span>{title}</span>
             <span>click</span>
           </div>
           <div className="multi-list">
-            {options.map((option) => (
+            {shown.map((option) => (
               <button
                 key={option.value}
                 type="button"

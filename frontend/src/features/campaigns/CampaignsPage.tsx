@@ -36,6 +36,35 @@ import {
   type CampaignListItem,
 } from './useCampaigns';
 
+type ViewMode = 'cards' | 'list';
+
+/**
+ * The chosen view survives leaving the page.
+ *
+ * Opening a wizard or an activation unmounts this component, so plain state
+ * would drop the reader back into Carduri every time they came back from a task
+ * they started here. Session storage rather than local: it is a property of the
+ * current sitting, not a preference to carry across days. A failure to read or
+ * write it is never worth an error - the view simply falls back to Carduri.
+ */
+const VIEW_KEY = 'omd.campaigns.view';
+
+function readView(): ViewMode {
+  try {
+    return window.sessionStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
+
+function rememberView(view: ViewMode): void {
+  try {
+    window.sessionStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // Private mode, or storage disabled - not worth surfacing.
+  }
+}
+
 /** Shortened type label, as `OMD.u.type()` did in the prototype. */
 function shortType(type: string): string {
   if (type.includes('umbrelă')) return 'Campanie-umbrelă';
@@ -87,7 +116,11 @@ function CampaignCard({
           Deschide campania
         </button>
         {canEdit ? (
-          <Link className="btn primary" to={`/activations/new?campaign=${item.id}`}>
+          <Link
+            className="btn primary"
+            to={`/activations/new?campaign=${item.id}`}
+            state={{ from: '/campaigns' }}
+          >
             ＋ Activare
           </Link>
         ) : null}
@@ -236,7 +269,11 @@ function CampaignPreviewPane({
           Deschide campania
         </button>
         {canEdit ? (
-          <Link className="btn secondary" to={`/activations/new?campaign=${item.id}`}>
+          <Link
+            className="btn secondary"
+            to={`/activations/new?campaign=${item.id}`}
+            state={{ from: '/campaigns' }}
+          >
             ＋ Activare
           </Link>
         ) : null}
@@ -326,10 +363,12 @@ export function CampaignsPage() {
   const { user } = useAuth();
   const canEdit = user?.role === 'ADMIN' || user?.role === 'EDITOR';
   const [filters, setFilters] = useState<CampaignFilters>(EMPTY_FILTERS);
-  const [view, setView] = useState<'cards' | 'list'>('cards');
+  const [view, setView] = useState<ViewMode>(readView);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string>('');
   const { items, meta, loading, error } = useCampaigns(filters);
+
+  useEffect(() => rememberView(view), [view]);
   const catalogs = useCatalogs();
 
   // Derived rather than stored, so a filter change that hides the selected row
