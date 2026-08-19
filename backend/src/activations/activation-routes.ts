@@ -277,9 +277,11 @@ activationRouter.get(
 
     const materials = await queryRows(
       `SELECT m.external_key AS id, m.title, m.channel_raw AS channel, m.format_text AS format,
+              m.other_channel AS otherChannel,
               m.budget_allocated AS budgetAllocated, m.run_start_date AS runStartDate,
               m.run_end_date AS runEndDate, m.public_url AS publicUrl, m.copy_text AS copy,
-              m.visual_name AS visualName
+              m.visual_name AS visualName, m.visual_canva_url AS visualCanvaUrl,
+              m.platform_external_id AS platformExternalId
          FROM activation_materials m
         WHERE m.activation_id = ? AND m.deleted_at IS NULL
         ORDER BY m.run_start_date, m.title`,

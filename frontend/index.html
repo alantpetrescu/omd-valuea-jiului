@@ -4,6 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OMD Valea Jiului – Sistem digital de marketing</title>
+    <!--
+      The two families the v13.3 prototype uses, served from our own origin.
+      A CDN <link> fails silently on a network without outbound internet, and
+      --serif then falls back to Georgia, which has no 600 cut — every heading
+      would render as faux bold. See frontend/public/fonts/fonts.css.
+    -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/SourceSerif4-600-latin.woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/fonts.css" />
   </head>
   <body>
     <div id="root"></div>

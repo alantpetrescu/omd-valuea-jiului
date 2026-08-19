@@ -96,6 +96,8 @@ export const ActivationInput = z.object({
         copy: z.string().default(''),
         publicUrl: z.string().default(''),
         visualName: z.string().default(''),
+        visualCanvaUrl: z.string().default(''),
+        platformExternalId: z.string().default(''),
       }),
     )
     .default([]),
@@ -364,6 +366,7 @@ async function replaceChildren(
       material.title, channelId, material.channel, material.otherChannel, material.format,
       material.budgetAllocated, material.runStartDate, material.runEndDate,
       material.visualName, material.copy, material.publicUrl,
+      material.visualCanvaUrl, material.platformExternalId,
     ];
 
     const existing = await idByColumn('activation_materials', 'external_key', externalKey, connection);
@@ -372,7 +375,8 @@ async function replaceChildren(
         `UPDATE activation_materials
             SET title = ?, channel_id = ?, channel_raw = ?, other_channel = ?, format_text = ?,
                 budget_allocated = ?, run_start_date = ?, run_end_date = ?, visual_name = ?,
-                copy_text = ?, public_url = ?, deleted_at = NULL, updated_by = ?
+                copy_text = ?, public_url = ?, visual_canva_url = ?, platform_external_id = ?,
+                deleted_at = NULL, updated_by = ?
           WHERE id = ?`,
         [...values, userId, existing],
         connection,
@@ -383,7 +387,7 @@ async function replaceChildren(
            (id, external_key, activation_id, title, channel_id, channel_raw, other_channel,
             format_text, budget_allocated, run_start_date, run_end_date, visual_name,
             copy_text, public_url, visual_canva_url, platform_external_id, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [newId(), externalKey, activationId, ...values, userId],
         connection,
       );

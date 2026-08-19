@@ -43,6 +43,85 @@ strategyRouter.get(
   }),
 );
 
+/**
+ * Campaign-side relations for the Repere strategice screen.
+ *
+ * The screen does not list a nomenclature; it answers "how much of the
+ * strategy is actually operationalised", and only the campaign fiches can say.
+ * A `usageCount` is not enough — the matrices need to know *which* campaign
+ * points at a reper and with which role, and the Publicuri / Produse / KPI
+ * views are built entirely from campaign content that has no strategic table
+ * of its own.
+ *
+ * Scoped to one strategy version: a campaign belongs to exactly one (spec
+ * 17.1), so mixing horizons would make the coverage numbers meaningless.
+ */
+type CampaignRelation = { campaignId: string; code: string; label: string; role: string };
+
+async function loadCampaignRelations(versionId: string) {
+  const campaigns = await queryRows<{
+    id: string;
+    title: string;
+    statusCode: string;
+    status: string;
+    insight: string | null;
+    valueProposition: string | null;
+    productCondition: string | null;
+    products: unknown;
+    kpiDefinitions: unknown;
+  }>(
+    `SELECT c.external_key AS id, c.title,
+            st.code AS statusCode, st.label AS status,
+            c.insight, c.value_proposition AS valueProposition,
+            c.product_condition AS productCondition,
+            c.products, c.kpi_definitions AS kpiDefinitions
+       FROM campaigns c
+       JOIN campaign_statuses st ON st.id = c.status_id
+      WHERE c.strategy_version_id = ? AND c.deleted_at IS NULL
+      ORDER BY c.external_key`,
+    [versionId],
+  );
+
+  const relationsFor = (table: string, joinTable: string, column: string) =>
+    queryRows<CampaignRelation>(
+      `SELECT c.external_key AS campaignId, s.code, s.label, r.relation_role AS role
+         FROM ${table} r
+         JOIN campaigns c ON c.id = r.campaign_id
+         JOIN ${joinTable} s ON s.id = r.${column}
+        WHERE c.strategy_version_id = ? AND c.deleted_at IS NULL
+        ORDER BY r.relation_role DESC, r.sort_order`,
+      [versionId],
+    );
+
+  const [programLinks, objectiveLinks, audienceLinks] = await Promise.all([
+    relationsFor('campaign_programs', 'strategic_programs', 'program_id'),
+    relationsFor('campaign_objectives', 'strategic_objectives', 'objective_id'),
+    relationsFor('campaign_audiences', 'audience_segments', 'audience_segment_id'),
+  ]);
+
+  const pick = (links: CampaignRelation[], campaignId: string, role: string) =>
+    links.filter((link) => link.campaignId === campaignId && link.role === role);
+
+  return campaigns.map((campaign) => ({
+    id: campaign.id,
+    title: campaign.title,
+    statusCode: campaign.statusCode,
+    status: campaign.status,
+    insight: campaign.insight ?? '',
+    valueProposition: campaign.valueProposition ?? '',
+    productCondition: campaign.productCondition ?? '',
+    // JSON columns arrive already parsed from mysql2; the guard covers NULL.
+    products: Array.isArray(campaign.products) ? campaign.products : [],
+    kpiDefinitions: Array.isArray(campaign.kpiDefinitions) ? campaign.kpiDefinitions : [],
+    programPrimaryCode: pick(programLinks, campaign.id, 'PRIMARY')[0]?.code ?? '',
+    programSecondaryCodes: pick(programLinks, campaign.id, 'SECONDARY').map((link) => link.code),
+    objectivePrimaryCode: pick(objectiveLinks, campaign.id, 'PRIMARY')[0]?.code ?? '',
+    objectiveSecondaryCodes: pick(objectiveLinks, campaign.id, 'SECONDARY').map((link) => link.code),
+    primaryAudienceSegment: pick(audienceLinks, campaign.id, 'PRIMARY')[0]?.label ?? '',
+    secondaryAudienceSegments: pick(audienceLinks, campaign.id, 'SECONDARY').map((link) => link.label),
+  }));
+}
+
 /** Full strategic content of one version, or of the ACTIVE one by default. */
 strategyRouter.get(
   '/strategy',
@@ -50,10 +129,18 @@ strategyRouter.get(
   asyncHandler(async (req, res) => {
     const requested = req.query.version ? String(req.query.version) : null;
 
-    const version = await queryOne<{ id: string; external_key: string; label: string; status: string }>(
+    const version = await queryOne<{
+      id: string;
+      external_key: string;
+      label: string;
+      status: string;
+      period_start_year: number;
+      period_end_year: number;
+    }>(
       requested
-        ? 'SELECT id, external_key, label, status FROM strategy_versions WHERE external_key = ?'
-        : "SELECT id, external_key, label, status FROM strategy_versions WHERE status = 'ACTIVE' ORDER BY period_start_year LIMIT 1",
+        ? 'SELECT id, external_key, label, status, period_start_year, period_end_year FROM strategy_versions WHERE external_key = ?'
+        : `SELECT id, external_key, label, status, period_start_year, period_end_year
+             FROM strategy_versions WHERE status = 'ACTIVE' ORDER BY period_start_year LIMIT 1`,
       requested ? [requested] : [],
     );
     if (!version) throw ApiError.notFound('Versiunea strategică nu a fost găsită.');
@@ -95,16 +182,38 @@ strategyRouter.get(
       [version.id],
     );
 
+    /**
+     * The full audience nomenclature, not only the used entries.
+     *
+     * A public that no campaign has picked up yet is a finding, not an
+     * absence: the screen shows "9 utilizate" out of 10 precisely because the
+     * tenth is still uncovered. Deriving the list from campaigns alone would
+     * silently drop it and inflate the coverage.
+     */
+    const audiences = await queryRows(
+      `SELECT code, label, is_active AS isActive, sort_order AS sortOrder
+         FROM audience_segments ORDER BY sort_order, label`,
+    );
+
+    const campaigns = await loadCampaignRelations(version.id);
+
     sendData(res, {
       version: {
         id: version.external_key,
         label: version.label,
         status: version.status,
+        // The screen prints "Rezultat urmărit până în <year>". Taking the year
+        // from the version rather than hardcoding 2028 keeps that heading true
+        // when a later horizon is activated (risk review section 3).
+        periodStartYear: version.period_start_year,
+        periodEndYear: version.period_end_year,
       },
       pillars,
       programs,
       objectives,
       programObjectives,
+      audiences,
+      campaigns,
     });
   }),
 );

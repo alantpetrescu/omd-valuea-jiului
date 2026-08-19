@@ -28,10 +28,18 @@ function AuthenticatedRoutes() {
   const { user } = useAuth();
 
   // A temporary password must be replaced before the app is usable (spec 11.5).
+  //
+  // This is still a real <Routes>, not a bare component: rendering one screen
+  // regardless of the URL let the sidebar links change the address bar while
+  // the page stayed put, which reads as a broken app rather than as a lock.
+  // Here every path redirects to /change-password, so URL and screen agree.
   if (user?.mustChangePassword) {
     return (
-      <AppShell>
-        <ChangePasswordPage />
+      <AppShell locked>
+        <Routes>
+          <Route path="/change-password" element={<ChangePasswordPage />} />
+          <Route path="*" element={<Navigate to="/change-password" replace />} />
+        </Routes>
       </AppShell>
     );
   }

@@ -12,3 +12,6 @@ storage/import-temp/*
 
 # Deployment secrets
 .env.docker
+
+# Visual-parity artefacts: screenshots, diffs and the staged prototype
+frontend/tests/visual-parity/.work/

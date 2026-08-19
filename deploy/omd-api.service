@@ -1,0 +1,56 @@
+# systemd unit for the Express API.
+#
+# The spec left the process manager "to be selected at deployment"; on an
+# ordinary Linux server systemd is already there and needs no extra runtime.
+# It restarts the process, captures logs into the journal, and starts it at
+# boot — which is the whole job.
+#
+# Install:
+#   sudo cp deploy/omd-api.service /etc/systemd/system/omd-api.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now omd-api
+#   sudo systemctl status omd-api
+#   journalctl -u omd-api -f
+
+[Unit]
+Description=OMD Valea Jiului API
+Documentation=file:/srv/omd/README_IMPLEMENTATION.md
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=omd
+Group=omd
+WorkingDirectory=/srv/omd/backend
+
+# dotenv reads .env from the working directory. Keep the file readable only by
+# the service user: it holds DB_PASSWORD, APP_SECRET and AUTH_SECRET.
+#   sudo chown omd:omd /srv/omd/backend/.env && sudo chmod 600 /srv/omd/backend/.env
+ExecStart=/usr/bin/node dist/server.js
+
+Restart=always
+RestartSec=3
+# Node writes pino JSON to stdout; the journal keeps it.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=omd-api
+
+# The API only ever answers through nginx, so it must not be reachable from
+# outside the host. HOST is also set in .env; this is the belt to that braces.
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+
+# Hardening. The service needs to read the repo and write only to storage/.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/omd/storage
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

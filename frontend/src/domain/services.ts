@@ -165,3 +165,73 @@ export function formatPercent(value: number | null | undefined, digits = 1, empt
         maximumFractionDigits: digits,
       }).format(number)}%`;
 }
+
+const MONTHS_LONG = [
+  'Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
+  'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie',
+];
+
+const monthName = (month: number): string => MONTHS_LONG[month - 1] ?? '';
+
+/** Consecutive months collapsed into `[from, to]` runs. */
+function monthRuns(months: number[] | null | undefined): Array<[number, number]> {
+  const clean = [...new Set((months ?? []).map(Number).filter((m) => m >= 1 && m <= 12))].sort(
+    (a, b) => a - b,
+  );
+
+  const runs: Array<[number, number]> = [];
+  for (const month of clean) {
+    const current = runs[runs.length - 1];
+    if (current && month === current[1] + 1) {
+      current[1] = month;
+      continue;
+    }
+    runs.push([month, month]);
+  }
+  return runs;
+}
+
+/**
+ * The strategic window a campaign's months describe — the prototype's
+ * `OMD.seasonality.periodLabel()`.
+ *
+ * Months are stored as an unordered set, so a winter campaign arrives as
+ * 1,2,3,11,12: two runs at opposite ends of the year. Rendering that literally
+ * would read "Ianuarie–martie · Noiembrie–decembrie", which describes two
+ * seasons rather than the one that wraps. The special case below joins them the
+ * way a reader means it: "Noiembrie–martie".
+ */
+export function seasonalityPeriodLabel(months: number[] | null | undefined): string {
+  const runs = monthRuns(months);
+  const total = runs.reduce((sum, [from, to]) => sum + (to - from + 1), 0);
+  if (total === 12) return 'Tot anul';
+  if (total === 0) return 'Luni neconfigurate';
+
+  const first = runs[0];
+  const second = runs[1];
+  if (runs.length === 2 && first && second && first[0] === 1 && second[1] === 12) {
+    return `${monthName(second[0])}–${monthName(first[1]).toLowerCase()}`;
+  }
+
+  return runs
+    .map(([from, to]) =>
+      from === to ? monthName(from) : `${monthName(from)}–${monthName(to).toLowerCase()}`,
+    )
+    .join(' · ');
+}
+
+/**
+ * Every selected month spelled out — the prototype's
+ * `OMD.seasonality.monthsLabel()`.
+ *
+ * Deliberately not the same as `seasonalityPeriodLabel`: that one names the
+ * window, this one enumerates the months the annual calendar will actually use.
+ * The seasonality editor shows both, because a window like "Noiembrie–martie"
+ * does not tell you which months are ticked.
+ */
+export function seasonalityMonthsLabel(months: number[] | null | undefined): string {
+  const clean = [...new Set((months ?? []).map(Number).filter((m) => m >= 1 && m <= 12))].sort(
+    (a, b) => a - b,
+  );
+  return clean.length > 0 ? clean.map(monthName).join(' · ') : 'Nicio lună selectată';
+}

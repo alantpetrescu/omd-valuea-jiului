@@ -1,5 +1,5 @@
 /**
- * Administrare — users, catalogs, imports, audit.
+ * Administrare — users, catalogs, strategy, imports, audit.
  *
  * A module of the same application, not a separate back office (spec 11.8):
  * same shell, same sidebar, same components. Nothing here looks like phpMyAdmin.
@@ -7,13 +7,19 @@
  * The catalogs tab is where the deletion policy becomes visible: a system value
  * shows a protected badge, a used value offers deactivation instead of delete,
  * and the reference count is shown before the user commits to anything.
+ *
+ * The strategy tab is a documented departure from §11.8 — see D-002 in
+ * KNOWN_DEVIATIONS.md. Strategic repere are deliberately NOT folded into
+ * Nomenclatoare: they are version-scoped, carry no `is_system` flag, and their
+ * codes are unique per version rather than globally, so they get their own tab.
  */
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, ApiError } from '../../api/client';
 import { formatDateTime } from '../../domain/services';
+import { StrategyAdminTab } from './StrategyAdminTab';
 
-type Tab = 'users' | 'catalogs' | 'imports' | 'audit';
+type Tab = 'users' | 'catalogs' | 'strategy' | 'imports' | 'audit';
 
 const CATALOGS: Array<{ key: string; label: string }> = [
   { key: 'audience_segments', label: 'Publicuri' },
@@ -92,7 +98,7 @@ export function AdminPage() {
       <header className="page-head">
         <div>
           <h1>Administrare</h1>
-          <p>Utilizatori, nomenclatoare, importuri și jurnal de audit.</p>
+          <p>Utilizatori, nomenclatoare, repere strategice, importuri și jurnal de audit.</p>
         </div>
       </header>
 
@@ -101,6 +107,7 @@ export function AdminPage() {
           [
             ['users', 'Utilizatori'],
             ['catalogs', 'Nomenclatoare'],
+            ['strategy', 'Strategie'],
             ['imports', 'Importuri'],
             ['audit', 'Audit'],
           ] as Array<[Tab, string]>
@@ -130,6 +137,7 @@ export function AdminPage() {
 
       {tab === 'users' ? <UsersTab onError={setError} onNotice={setNotice} /> : null}
       {tab === 'catalogs' ? <CatalogsTab onError={setError} onNotice={setNotice} /> : null}
+      {tab === 'strategy' ? <StrategyAdminTab onError={setError} onNotice={setNotice} /> : null}
       {tab === 'imports' ? <ImportsTab onError={setError} /> : null}
       {tab === 'audit' ? <AuditTab onError={setError} /> : null}
     </>

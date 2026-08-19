@@ -5,12 +5,47 @@
  * sections, the same class names, the same Romanian headings. Content that the
  * prototype read from localStorage now arrives from the API.
  */
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { DeleteButton } from '../../components/DeleteButton';
+
+/**
+ * The eight tabs of the prototype's campaign drawer, in its order.
+ *
+ * The same eight sections are rendered either one at a time (`Cu taburi`) or
+ * stacked (`Cap-coadă`). `CampaignBlocks` is the single source for both, so the
+ * two views can never drift apart.
+ */
+export type CampaignTabId =
+  | 'overview'
+  | 'strategy'
+  | 'concept'
+  | 'products'
+  | 'rules'
+  | 'deliverables'
+  | 'types'
+  | 'acts';
+
+export const CAMPAIGN_TABS: Array<{ id: CampaignTabId; label: string }> = [
+  { id: 'overview', label: 'Prezentare' },
+  { id: 'strategy', label: 'Încadrare strategică' },
+  { id: 'concept', label: 'Public și concept' },
+  { id: 'products', label: 'Produse și măsurare' },
+  { id: 'rules', label: 'Reguli' },
+  { id: 'deliverables', label: 'Livrabile & template-uri' },
+  { id: 'types', label: 'Exemple de activări' },
+  { id: 'acts', label: 'Activări create' },
+];
+
+/**
+ * Which section is on screen. `null` means "all of them" — the Cap-coadă view
+ * and the standalone /campaigns/:key page both leave it null, so neither has to
+ * know that tabs exist.
+ */
+export const CampaignTabContext = createContext<CampaignTabId | null>(null);
 
 interface Mockup {
   id: string;
@@ -22,7 +57,7 @@ interface Mockup {
   assets: Array<{ id: string; format: string; label: string; src: string }>;
 }
 
-interface CampaignDetail {
+export interface CampaignDetail {
   id: string;
   title: string;
   accent: string;
@@ -76,7 +111,7 @@ interface CampaignDetail {
   strategyVersionLabel: string;
 }
 
-interface CampaignActivation {
+export interface CampaignActivation {
   id: string;
   title: string;
   startDate: string | null;
@@ -108,7 +143,27 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Block({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
+function Block({
+  number,
+  title,
+  tab,
+  children,
+}: {
+  number: string;
+  title: string;
+  tab: CampaignTabId;
+  children: React.ReactNode;
+}) {
+  const activeTab = useContext(CampaignTabContext);
+  if (activeTab !== null && activeTab !== tab) return null;
+
+  // In tabs mode the tab strip already names the section, so the prototype
+  // renders the content bare - no card, no numbered green header. The header
+  // belongs to Cap-coadă, where eight sections run together and need
+  // separating. Same source, two presentations (prototype: tabContent() vs
+  // fullCampaignView()).
+  if (activeTab !== null) return <>{children}</>;
+
   return (
     <section className="campaign-full-section">
       <header>
@@ -121,7 +176,7 @@ function Block({ number, title, children }: { number: string; title: string; chi
 }
 
 /** Lightbox for template visuals, as the prototype's `showImage()` did. */
-function Lightbox({
+export function Lightbox({
   image,
   onClose,
 }: {
@@ -230,9 +285,6 @@ export function CampaignDetailPage() {
   if (error) return <div className="state-note error">{error}</div>;
   if (!campaign) return null;
 
-  const months = (campaign.seasonalityMonths ?? []).map((month) => MONTHS[month - 1]).join(', ');
-  const hasFramework = campaign.frameworkDeliverables?.length > 0;
-
   return (
     <>
       <header className="page-head">
@@ -260,8 +312,33 @@ export function CampaignDetailPage() {
         ) : null}
       </header>
 
+      <CampaignBlocks campaign={campaign} activations={activations} />
+    </>
+  );
+}
+
+/**
+ * The eight numbered sections, shared by the standalone page and the drawer.
+ *
+ * Rendering is driven entirely by CampaignTabContext: with no provider every
+ * Block renders, which is what the page and the Cap-coadă view want.
+ */
+export function CampaignBlocks({
+  campaign,
+  activations,
+}: {
+  campaign: CampaignDetail;
+  activations: CampaignActivation[];
+}) {
+  const [preview, setPreview] = useState<{ src: string; caption: string } | null>(null);
+
+  const months = (campaign.seasonalityMonths ?? []).map((month) => MONTHS[month - 1]).join(', ');
+  const hasFramework = campaign.frameworkDeliverables?.length > 0;
+
+  return (
+    <>
       <div className="campaign-full-view">
-        <Block number="0" title="Prezentare și identificare">
+        <Block number="0" tab="overview" title="Prezentare și identificare">
           <Section title="Identificare">
             <table className="table">
               <tbody>
@@ -312,7 +389,7 @@ export function CampaignDetailPage() {
           </Section>
         </Block>
 
-        <Block number="1" title="Încadrare strategică">
+        <Block number="1" tab="strategy" title="Încadrare strategică">
           <Section title="Program principal">
             <p>{campaign.programPrimary ?? 'De completat'}</p>
           </Section>
@@ -327,7 +404,7 @@ export function CampaignDetailPage() {
           </Section>
         </Block>
 
-        <Block number="2" title="Public și concept">
+        <Block number="2" tab="concept" title="Public și concept">
           <Section title="Public principal">
             <p>
               <strong>{campaign.primaryAudienceSegment ?? ''}</strong>
@@ -382,7 +459,7 @@ export function CampaignDetailPage() {
           </Section>
         </Block>
 
-        <Block number="3" title="Produse, canale și măsurare">
+        <Block number="3" tab="products" title="Produse, canale și măsurare">
           <Section title="Produse și experiențe promovate">
             <BulletList values={campaign.products} />
           </Section>
@@ -427,7 +504,7 @@ export function CampaignDetailPage() {
           </Section>
         </Block>
 
-        <Block number="4" title="Reguli de utilizare și adaptare">
+        <Block number="4" tab="rules" title="Reguli de utilizare și adaptare">
           <Section title="Elemente fixe">
             <BulletList values={campaign.fixedElements} />
           </Section>
@@ -465,7 +542,7 @@ export function CampaignDetailPage() {
           </Section>
         </Block>
 
-        <Block number="5" title="Livrabile și template-uri">
+        <Block number="5" tab="deliverables" title="Livrabile și template-uri">
           {hasFramework ? (
             <>
               <Section title="5. Livrabile de cadru">
@@ -594,7 +671,7 @@ export function CampaignDetailPage() {
           )}
         </Block>
 
-        <Block number="6" title="Exemple orientative de activări">
+        <Block number="6" tab="types" title="Exemple orientative de activări">
           <div className="view-note">
             <b>Direcții de lucru.</b> Pentru fiecare activare implementată se va completa ulterior o
             fișă distinctă în Planul anual, cu perioadă, buget, responsabilități, materiale, ținte și
@@ -630,7 +707,7 @@ export function CampaignDetailPage() {
           </div>
         </Block>
 
-        <Block number="7" title="Activări create">
+        <Block number="7" tab="acts" title="Activări create">
           <div className="drawer-table-scroll">
             <table className="table wide">
               <tbody>

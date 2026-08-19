@@ -34,7 +34,13 @@ function initials(name: string): string {
   return parts.map((part) => part[0]?.toUpperCase() ?? '').join('') || 'OMD';
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+/**
+ * `locked` is set while the account still carries a temporary password. The
+ * navigation is then rendered as inert text rather than links: those routes are
+ * refused anyway, and a link that changes the URL without changing the page
+ * reads as a broken application (spec 11.5).
+ */
+export function AppShell({ children, locked = false }: { children: ReactNode; locked?: boolean }) {
   const { user, logout } = useAuth();
   const items = user?.role === 'ADMIN' ? [...OPERATIONAL_NAV, ...ADMIN_NAV] : OPERATIONAL_NAV;
 
@@ -49,22 +55,44 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav>
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => (isActive ? 'nav active' : 'nav')}
-            >
-              <i>{item.icon}</i>
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {items.map((item) =>
+            locked ? (
+              <span
+                key={item.to}
+                className="nav locked"
+                aria-disabled="true"
+                title="Disponibil după schimbarea parolei"
+              >
+                <i>{item.icon}</i>
+                <span>{item.label}</span>
+              </span>
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => (isActive ? 'nav active' : 'nav')}
+              >
+                <i>{item.icon}</i>
+                <span>{item.label}</span>
+              </NavLink>
+            ),
+          )}
         </nav>
 
         <div className="side-note">
-          Campanii + activări + repere strategice
-          <br />
-          Date live din MySQL
+          {locked ? (
+            <>
+              Meniul se deblochează după
+              <br />
+              schimbarea parolei temporare
+            </>
+          ) : (
+            <>
+              Campanii + activări + repere strategice
+              <br />
+              Date live din MySQL
+            </>
+          )}
         </div>
       </aside>
 
@@ -76,9 +104,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <b>{user ? initials(user.name) : 'OMD'}</b>
               <span>{user ? ROLE_LABELS[user.role] : ''}</span>
             </div>
-            <Link className="btn secondary" to="/change-password">
-              Schimbă parola
-            </Link>
+            {locked ? null : (
+              <Link className="btn secondary" to="/change-password">
+                Schimbă parola
+              </Link>
+            )}
             <button className="btn secondary" type="button" onClick={() => void logout()}>
               Deconectare
             </button>

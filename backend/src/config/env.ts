@@ -49,6 +49,18 @@ const schema = z.object({
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
+  /**
+   * Reverse-proxy hop count, or a list of trusted proxy addresses.
+   *
+   * Everything in process.env is a string, and Express reads a string as a
+   * comma-separated list of IPs/subnets — so a bare `TRUST_PROXY=1`, which is
+   * how the hop count is universally written, would parse as the address "1",
+   * trust nothing, and leave req.ip pointing at nginx. The login rate limiter
+   * keys on req.ip, so every user would then share one bucket. `true` is worse:
+   * proxy-addr throws "invalid IP address" and the process never starts.
+   *
+   * Normalising here means the deployment file can hold the obvious value.
+   */
   TRUST_PROXY: z.string().optional(),
   ALLOWED_ORIGIN: z.string().optional(),
   BACKUP_DIR: z.string().optional(),
@@ -67,8 +79,18 @@ if (!parsed.success) {
 
 const raw = parsed.data;
 
+function trustProxy(value: string | undefined): number | boolean | string | undefined {
+  if (value === undefined || value.trim() === '') return undefined;
+  const text = value.trim();
+  if (/^\d+$/.test(text)) return Number(text);
+  if (text === 'true') return true;
+  if (text === 'false') return false;
+  return text;
+}
+
 export const env = {
   ...raw,
+  TRUST_PROXY: trustProxy(raw.TRUST_PROXY),
   isProduction: raw.APP_ENV === 'production',
   isStaging: raw.APP_ENV === 'staging',
   /** Repository root — the folder containing backend/, database/ and storage/. */

@@ -1,591 +1,1067 @@
 /**
- * Repere strategice.
+ * Repere strategice — the v13.3 screen, rebuilt in React.
  *
- * A shared screen, not an Admin-only one (spec 11.8): everyone reads the
- * strategic frame, ADMIN additionally edits it in place. That is why the edit
- * controls appear inline rather than in a separate back office.
+ * The markup and class names are the prototype's, so the lifted stylesheet
+ * applies unchanged and the live screen is the prototype screen (spec 3.4:
+ * migrate the rules, not the `OMD.*` globals; UI direction does not change).
  *
- * Codes are shown alongside labels because the code is the identity — it is
- * what campaigns point at, and what stays stable when a label is reworded.
+ * Three tabs, three view modes. Sinteză answers "how much of the strategy is
+ * operationalised"; the other two drill into the repere themselves. The
+ * matrices are the reason the screen exists — they are the only place a gap in
+ * coverage is visible at a glance.
+ *
+ * Read-only for every role, including ADMIN, so the live screen is the
+ * prototype screen with no exceptions. Editing the strategic repere lives in
+ * Administrare → Strategie (departure D-002 from README_PROGRAMMER §5.1,
+ * recorded in KNOWN_DEVIATIONS.md); what the campaigns contribute — publicuri,
+ * produse, KPI — is edited on the campaign fiche that declares it.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { api, ApiError } from '../../api/client';
-import { useAuth } from '../auth/AuthContext';
+import {
+  buildModel,
+  campaignLabel,
+  cut,
+  entityKey,
+  filterItems,
+  hasCampaignRelations,
+  objectiveRole,
+  programRole,
+  relationLabel,
+  relationTitle,
+} from './strategyModel';
+import type {
+  DerivedEntity,
+  EntityType,
+  ObjectiveEntity,
+  ProgramEntity,
+  RelationRole,
+  StrategyEntity,
+  StrategyModel,
+  StrategyPayload,
+} from './strategyModel';
 
-interface StrategyVersion {
-  id: string;
-  label: string;
-  status: string;
-  periodStartYear: number;
-  periodEndYear: number;
-  campaignCount: number;
-  pillarCount: number;
-  programCount: number;
-  objectiveCount: number;
-}
+type Tab = 'summary' | 'programs' | 'audiences';
+type View = 'matrix' | 'cards' | 'detail';
+type ProgramKind = 'programs' | 'objectives';
+type AudienceKind = 'audiences' | 'products';
 
-interface Pillar {
-  code: string;
-  label: string;
-  displayLabel: string;
-  hint: string;
-  isActive: number;
-  usageCount: number;
-}
+const TABS: Array<[Tab, string]> = [
+  ['summary', 'Sinteză'],
+  ['programs', 'Programe și obiective'],
+  ['audiences', 'Publicuri și produse'],
+];
 
-interface Program {
-  code: string;
-  name: string;
-  label: string;
-  result: string;
-  marketingObjective: string;
-  approach: string;
-  horizonResult: string;
-  targetGroups: string;
-  kpiText: string;
-  sources: string;
-  annualActions: string;
-  validationStatus: string;
-  isActive: number;
-  usageCount: number;
-}
-
-interface Objective {
-  code: string;
-  name: string;
-  label: string;
-  source: string;
-  isActive: number;
-  usageCount: number;
-}
-
-interface StrategyPayload {
-  version: { id: string; label: string; status: string };
-  pillars: Pillar[];
-  programs: Program[];
-  objectives: Objective[];
-  programObjectives: Array<{ programCode: string; objectiveCode: string }>;
-}
-
-type Tab = 'pillars' | 'programs' | 'objectives' | 'versions';
+const VIEWS: Array<[View, string, string]> = [
+  ['matrix', '▦', 'Matrice'],
+  ['cards', '▦', 'Carduri'],
+  ['detail', '▤', 'Fișă'],
+];
 
 export function StrategyPage() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
+  const navigate = useNavigate();
 
-  const [versions, setVersions] = useState<StrategyVersion[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
-  const [data, setData] = useState<StrategyPayload | null>(null);
-  const [tab, setTab] = useState<Tab>('pillars');
+  const [payload, setPayload] = useState<StrategyPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ kind: Tab; code: string } | null>(null);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const load = useCallback(async (version: string | null) => {
+  const [tab, setTab] = useState<Tab>('summary');
+  const [view, setView] = useState<View>('matrix');
+  const [query, setQuery] = useState('');
+  const [programKind, setProgramKind] = useState<ProgramKind>('programs');
+  const [audienceKind, setAudienceKind] = useState<AudienceKind>('audiences');
+  // The prototype opens on P5.2, the program the portfolio leans on hardest.
+  const [selected, setSelected] = useState<{ type: EntityType; id: string }>({
+    type: 'program',
+    id: 'P5.2',
+  });
+
+  const load = useCallback(async () => {
     setError(null);
     try {
-      const query = version ? `?version=${encodeURIComponent(version)}` : '';
-      const response = await api.get<StrategyPayload>(`/strategy${query}`);
-      setData(response.data);
+      const response = await api.get<StrategyPayload>('/strategy');
+      setPayload(response.data);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Strategia nu a putut fi încărcată.');
-    }
-  }, []);
-
-  useEffect(() => {
-    api
-      .get<StrategyVersion[]>('/strategy/versions')
-      .then((response) => setVersions(response.data))
-      .catch(() => setVersions([]));
-  }, []);
-
-  useEffect(() => {
-    void load(selectedVersion).finally(() => setLoading(false));
-  }, [selectedVersion, load]);
-
-  async function save(kind: Tab, code: string) {
-    if (!data) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await api.put(`/strategy/${encodeURIComponent(data.version.id)}/${kind}/${encodeURIComponent(code)}`, draft);
-      setEditing(null);
-      setNotice(`Reperul ${code} a fost actualizat.`);
-      await load(selectedVersion);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Modificarea nu a putut fi salvată.');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  }
+  }, []);
 
-  async function toggleActive(kind: Tab, code: string) {
-    if (!data) return;
-    setError(null);
-    try {
-      await api.post(
-        `/strategy/${encodeURIComponent(data.version.id)}/${kind}/${encodeURIComponent(code)}/toggle-active`,
-      );
-      await load(selectedVersion);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Starea nu a putut fi schimbată.');
-    }
-  }
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  async function activateVersion(id: string) {
-    setError(null);
-    try {
-      await api.post(`/strategy/versions/${encodeURIComponent(id)}/activate`);
-      const refreshed = await api.get<StrategyVersion[]>('/strategy/versions');
-      setVersions(refreshed.data);
-      setNotice(`Versiunea ${id} este acum activă.`);
-      await load(selectedVersion);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Versiunea nu a putut fi activată.');
-    }
-  }
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const model = useMemo(() => (payload ? buildModel(payload) : null), [payload]);
 
   if (loading) return <div className="state-note">Se încarcă reperele strategice…</div>;
-  if (!data) return <div className="state-note error">{error ?? 'Strategia nu este disponibilă.'}</div>;
+  if (!model || !payload) {
+    return <div className="state-note error">{error ?? 'Strategia nu este disponibilă.'}</div>;
+  }
 
-  const TABS: Array<{ key: Tab; label: string; count: number }> = [
-    { key: 'pillars', label: 'Piloni', count: data.pillars.length },
-    { key: 'programs', label: 'Programe', count: data.programs.length },
-    { key: 'objectives', label: 'Obiective', count: data.objectives.length },
-    { key: 'versions', label: 'Versiuni strategice', count: versions.length },
-  ];
+  /**
+   * The screen is built on the campaign-side relations `GET /strategy` grew for
+   * it. An API that predates them answers 200 without them, and every coverage
+   * figure would then render as zero — a wrong answer presented as a fact.
+   * Better to say what is actually wrong.
+   */
+  if (!hasCampaignRelations(payload)) {
+    return (
+      <div className="state-note error" role="alert">
+        <strong>API-ul răspunde fără relațiile cu campaniile.</strong>
+        <p>
+          Ecranul are nevoie de câmpurile <code>campaigns</code> și <code>audiences</code> din{' '}
+          <code>GET /api/v1/strategy</code>. Serverul care răspunde acum nu le trimite, deci rulează o
+          versiune mai veche decât acest ecran — cel mai probabil un build compilat vechi. Repornește
+          backendul (<code>npm run dev</code>) sau reconstruiește-l (<code>npm run build</code>) și
+          reîncarcă pagina.
+        </p>
+      </div>
+    );
+  }
+
+  function openEntity(type: EntityType, id: string) {
+    setSelected({ type, id });
+    setView('detail');
+  }
+
+  function switchTab(next: Tab) {
+    setTab(next);
+    // Sinteză has no fiche of its own; the prototype falls back to cards.
+    if (next === 'summary' && view === 'detail') setView('cards');
+  }
+
+  function jump(target: Tab, kind: string) {
+    setTab(target);
+    if (kind === 'objectives') setProgramKind('objectives');
+    if (kind === 'programs') setProgramKind('programs');
+    if (kind === 'audiences') setAudienceKind('audiences');
+    setView('cards');
+  }
 
   return (
     <>
       <header className="page-head">
         <div>
           <h1>Repere strategice</h1>
-          <p>
-            {data.version.label} · <span className="badge status">{data.version.status}</span>
-            {isAdmin ? ' · poți edita denumirile; codurile rămân neschimbate' : null}
-          </p>
+          <p>Vedere de ansamblu asupra programelor, obiectivelor SMART, publicurilor și produselor.</p>
+        </div>
+        <div className="actions">
+          <button
+            className="btn secondary"
+            type="button"
+            onClick={() =>
+              setToast(
+                'Nomenclatoarele provin din matricea strategică Excel. Relațiile și acoperirea sunt generate din fișele campaniilor.',
+              )
+            }
+          >
+            ⓘ Sursa datelor
+          </button>
         </div>
       </header>
 
-      {versions.length > 1 ? (
-        <div className="calendar-year-switch">
-          {versions.map((version) => (
+      <Stats model={model} />
+
+      <nav className="strategic-tabs">
+        {TABS.map(([id, label]) => (
+          <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => switchTab(id)}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <section className="strategic-toolbar">
+        <label className="search">
+          <i>⌕</i>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Caută reper, obiectiv, public, produs sau campanie"
+          />
+        </label>
+        <div className="view-switch" aria-label="Mod de vizualizare">
+          {VIEWS.map(([id, glyph, label]) => (
             <button
-              key={version.id}
+              key={id}
               type="button"
-              className={version.id === data.version.id ? 'btn primary' : 'btn secondary'}
-              onClick={() => setSelectedVersion(version.id)}
+              className={view === id ? 'active' : ''}
+              title={label}
+              onClick={() => setView(id)}
             >
-              {version.id}
+              {glyph} <span>{label}</span>
             </button>
           ))}
         </div>
-      ) : null}
+      </section>
 
-      <div className="wizard-steps">
-        {TABS.map((entry, index) => (
-          <button
-            key={entry.key}
-            type="button"
-            className={entry.key === tab ? 'wizard-step active' : 'wizard-step'}
-            onClick={() => setTab(entry.key)}
-          >
-            <b>{entry.count}</b>
-            <span>{entry.label}</span>
-          </button>
-        ))}
-      </div>
+      <section id="strategicContent">
+        <TabContent
+          model={model}
+          payload={payload}
+          tab={tab}
+          view={view}
+          query={query}
+          programKind={programKind}
+          audienceKind={audienceKind}
+          selected={selected}
+          onOpenEntity={openEntity}
+          onOpenCampaign={(id) => navigate(`/campaigns/${id}`)}
+          onJump={jump}
+          onSelect={setSelected}
+          onProgramKind={(kind) => {
+            setProgramKind(kind);
+            setSelected({ type: kind === 'programs' ? 'program' : 'objective', id: '' });
+          }}
+          onAudienceKind={(kind) => {
+            setAudienceKind(kind);
+            setSelected({ type: kind === 'audiences' ? 'audience' : 'product', id: '' });
+          }}
+        />
+      </section>
 
       {error ? (
         <div className="state-note error" role="alert">
           {error}
         </div>
       ) : null}
-      {notice ? <div className="state-note">{notice}</div> : null}
 
-      {tab === 'pillars' ? (
-        <section className="activation-list-card">
-          <div className="activation-table-scroll">
-            <table className="activation-list-table">
-              <thead>
-                <tr>
-                  <th>Cod</th>
-                  <th>Denumire</th>
-                  <th>Etichetă scurtă</th>
-                  <th>Utilizat în</th>
-                  <th>Stare</th>
-                  {isAdmin ? <th /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {data.pillars.map((pillar) => (
-                  <tr key={pillar.code}>
-                    <td>
-                      <code>{pillar.code}</code>
-                    </td>
-                    <td>
-                      {editing?.kind === 'pillars' && editing.code === pillar.code ? (
-                        <input
-                          value={draft.label ?? ''}
-                          onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-                        />
-                      ) : (
-                        pillar.label
-                      )}
-                    </td>
-                    <td>
-                      {editing?.kind === 'pillars' && editing.code === pillar.code ? (
-                        <input
-                          value={draft.displayLabel ?? ''}
-                          onChange={(e) => setDraft({ ...draft, displayLabel: e.target.value })}
-                        />
-                      ) : (
-                        pillar.displayLabel
-                      )}
-                    </td>
-                    <td>{pillar.usageCount} campanii</td>
-                    <td>
-                      <span className={pillar.isActive ? 'badge status' : 'badge'}>
-                        {pillar.isActive ? 'Activ' : 'Inactiv'}
-                      </span>
-                    </td>
-                    {isAdmin ? (
-                      <td>
-                        {editing?.kind === 'pillars' && editing.code === pillar.code ? (
-                          <>
-                            <button
-                              className="btn primary"
-                              type="button"
-                              disabled={saving}
-                              onClick={() => void save('pillars', pillar.code)}
-                            >
-                              Salvează
-                            </button>
-                            <button className="btn ghost" type="button" onClick={() => setEditing(null)}>
-                              Renunță
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              className="btn secondary"
-                              type="button"
-                              onClick={() => {
-                                setEditing({ kind: 'pillars', code: pillar.code });
-                                setDraft({
-                                  label: pillar.label,
-                                  displayLabel: pillar.displayLabel,
-                                  hint: pillar.hint,
-                                });
-                              }}
-                            >
-                              Editează
-                            </button>
-                            <button
-                              className="btn ghost"
-                              type="button"
-                              onClick={() => void toggleActive('pillars', pillar.code)}
-                            >
-                              {pillar.isActive ? 'Dezactivează' : 'Activează'}
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      {toast ? (
+        <div className="toastbox">
+          <div className="toast">{toast}</div>
+        </div>
       ) : null}
+    </>
+  );
+}
 
-      {tab === 'objectives' ? (
-        <section className="activation-list-card">
-          <div className="activation-table-scroll">
-            <table className="activation-list-table">
-              <thead>
-                <tr>
-                  <th>Cod</th>
-                  <th>Obiectiv</th>
-                  <th>Sursă</th>
-                  <th>Utilizat în</th>
-                  <th>Stare</th>
-                  {isAdmin ? <th /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {data.objectives.map((objective) => (
-                  <tr key={objective.code}>
-                    <td>
-                      <code>{objective.code}</code>
-                    </td>
-                    <td>
-                      {editing?.kind === 'objectives' && editing.code === objective.code ? (
-                        <textarea
-                          rows={2}
-                          value={draft.name ?? ''}
-                          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                        />
-                      ) : (
-                        objective.name
-                      )}
-                    </td>
-                    <td>{objective.source}</td>
-                    <td>{objective.usageCount} campanii</td>
-                    <td>
-                      <span className={objective.isActive ? 'badge status' : 'badge'}>
-                        {objective.isActive ? 'Activ' : 'Inactiv'}
-                      </span>
-                    </td>
-                    {isAdmin ? (
-                      <td>
-                        {editing?.kind === 'objectives' && editing.code === objective.code ? (
-                          <>
-                            <button
-                              className="btn primary"
-                              type="button"
-                              disabled={saving}
-                              onClick={() => void save('objectives', objective.code)}
-                            >
-                              Salvează
-                            </button>
-                            <button className="btn ghost" type="button" onClick={() => setEditing(null)}>
-                              Renunță
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              className="btn secondary"
-                              type="button"
-                              onClick={() => {
-                                setEditing({ kind: 'objectives', code: objective.code });
-                                setDraft({
-                                  name: objective.name,
-                                  label: objective.label,
-                                  source: objective.source,
-                                });
-                              }}
-                            >
-                              Editează
-                            </button>
-                            <button
-                              className="btn ghost"
-                              type="button"
-                              onClick={() => void toggleActive('objectives', objective.code)}
-                            >
-                              {objective.isActive ? 'Dezactivează' : 'Activează'}
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+/* ------------------------------------------------------------------ stats */
+
+function Stats({ model }: { model: StrategyModel }) {
+  const coveredObjectives = model.objectives.filter((item) => item.usages.length).length;
+  const coveredPrograms = model.programs.filter((item) => item.usages.length).length;
+  const usedAudiences = model.audiences.filter((item) => item.usages.length).length;
+
+  /**
+   * Every interpolated line is emitted as ONE text node.
+   *
+   * `{n} utilizate de campanii` would be two adjacent text nodes, and the
+   * browser shapes a split run with slightly different sub-pixel kerning than
+   * the prototype's single node — visible as a handful of differing pixels on
+   * the closing glyphs. Template literals keep the run intact.
+   */
+  return (
+    <section className="stats strategic-stats">
+      <div className="stat">
+        <small>Programe strategice</small>
+        <b>{model.programs.length}</b>
+        <span>{`${coveredPrograms} utilizate de campanii`}</span>
+      </div>
+      <div className="stat">
+        <small>Obiective SMART</small>
+        <b>{model.objectives.length}</b>
+        <span>{`${coveredObjectives} acoperite direct`}</span>
+      </div>
+      <div className="stat">
+        <small>Publicuri în nomenclator</small>
+        <b>{model.audiences.length}</b>
+        <span>{`${usedAudiences} utilizate`}</span>
+      </div>
+      <div className="stat">
+        <small>KPI utilizați</small>
+        <b>{model.kpis.length}</b>
+        <span>{`${model.sources.length} surse distincte`}</span>
+      </div>
+    </section>
+  );
+}
+
+/* ----------------------------------------------------------- tab content */
+
+interface ContentProps {
+  model: StrategyModel;
+  payload: StrategyPayload;
+  tab: Tab;
+  view: View;
+  query: string;
+  programKind: ProgramKind;
+  audienceKind: AudienceKind;
+  selected: { type: EntityType; id: string };
+  onOpenEntity: (type: EntityType, id: string) => void;
+  onOpenCampaign: (id: string) => void;
+  onJump: (tab: Tab, kind: string) => void;
+  onSelect: (value: { type: EntityType; id: string }) => void;
+  onProgramKind: (kind: ProgramKind) => void;
+  onAudienceKind: (kind: AudienceKind) => void;
+}
+
+function TabContent(props: ContentProps) {
+  const { model, tab, view } = props;
+
+  if (view === 'detail') return <DetailView {...props} />;
+  if (tab === 'summary') return view === 'matrix' ? <SummaryMatrix {...props} /> : <SummaryCards {...props} />;
+  if (tab === 'programs') {
+    return view === 'matrix' ? <ProgramObjectiveMatrix {...props} /> : <ProgramObjectiveCards {...props} />;
+  }
+  return view === 'matrix' ? <AudienceProductMatrix {...props} /> : <AudienceProductCards {...props} />;
+}
+
+/* --------------------------------------------------------------- sinteză */
+
+function CoverageBar({ value, total, label }: { value: number; total: number; label: string }) {
+  const pct = total ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="coverage-line">
+      <div>
+        <span>{label}</span>
+        <b>{`${value}/${total}`}</b>
+      </div>
+      <div className="coverage-track">
+        <span style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function SummaryCards({ model, onJump }: ContentProps) {
+  const objectiveGaps = model.objectives.filter((item) => !item.usages.length);
+  const programGaps = model.programs.filter((item) => !item.usages.length);
+  const thinAudiences = model.audiences.filter((item) => item.usages.length === 1);
+
+  return (
+    <div className="strategic-summary-grid">
+      <section className="summary-panel">
+        <header>
+          <div>
+            <small>Acoperire strategică</small>
+            <h3>Cât din strategie este operaționalizat</h3>
           </div>
-        </section>
+          <span className="status-dot ok" />
+        </header>
+        <CoverageBar
+          value={model.programs.filter((item) => item.usages.length).length}
+          total={model.programs.length}
+          label="Programe asociate campaniilor"
+        />
+        <CoverageBar
+          value={model.objectives.filter((item) => item.usages.length).length}
+          total={model.objectives.length}
+          label="Obiective SMART acoperite"
+        />
+        <CoverageBar
+          value={model.audiences.filter((item) => item.usages.length).length}
+          total={model.audiences.length}
+          label="Publicuri utilizate"
+        />
+      </section>
+
+      <section className="summary-panel">
+        <header>
+          <div>
+            <small>Semnale de completare</small>
+            <h3>Repere care necesită atenție</h3>
+          </div>
+        </header>
+        <button className="diagnostic-row" type="button" onClick={() => onJump('programs', 'objectives')}>
+          <span>Obiective fără campanie asociată</span>
+          <b>{objectiveGaps.length}</b>
+        </button>
+        <button className="diagnostic-row" type="button" onClick={() => onJump('programs', 'programs')}>
+          <span>Programe neutilizate în portofoliu</span>
+          <b>{programGaps.length}</b>
+        </button>
+        <button className="diagnostic-row" type="button" onClick={() => onJump('audiences', 'audiences')}>
+          <span>Publicuri prezente într-o singură campanie</span>
+          <b>{thinAudiences.length}</b>
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function SummaryMatrix({ model, onOpenEntity }: ContentProps) {
+  const { objectives } = model;
+
+  return (
+    <section className="matrix-card">
+      <header>
+        <div>
+          <small>Matrice de sinteză</small>
+          <h3>Programe strategice × obiective SMART</h3>
+        </div>
+        <span>● obiectiv prevăzut în program · ✓ obiectiv acoperit de campanii</span>
+      </header>
+      <div className="matrix-scroll">
+        <table className="relation-matrix summary-matrix">
+          <thead>
+            <tr>
+              <th>Program</th>
+              {objectives.map((objective) => (
+                <th key={objective.code} title={objective.name}>
+                  {objective.code}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {model.programs.map((program) => (
+              <tr key={program.code}>
+                <th>
+                  <button type="button" onClick={() => onOpenEntity('program', program.code)}>
+                    <b>{program.code}</b>
+                    <span>{program.name.replace('Programul pentru ', '')}</span>
+                  </button>
+                </th>
+                {objectives.map((objective) => {
+                  const belongs = program.objectiveCodes.includes(objective.code);
+                  const covered = objective.usages.length > 0;
+                  return (
+                    <td
+                      key={objective.code}
+                      className={`${belongs ? 'linked' : ''} ${belongs && covered ? 'covered' : ''}`}
+                      title={
+                        belongs
+                          ? covered
+                            ? 'Prevăzut și acoperit prin campanii'
+                            : 'Prevăzut, dar neacoperit'
+                          : 'Fără relație în matrice'
+                      }
+                    >
+                      {belongs ? (covered ? '✓' : '●') : ''}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/* ----------------------------------------------------------------- cards */
+
+function SubToggle({
+  options,
+  current,
+  onChange,
+}: {
+  options: Array<[string, string]>;
+  current: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="sub-toggle">
+      {options.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          className={current === id ? 'active' : ''}
+          onClick={() => onChange(id)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EntityCard({ item, onOpen }: { item: StrategyEntity; onOpen: () => void }) {
+  const isOfficial = item.type === 'program' || item.type === 'objective';
+  const code = 'code' in item ? item.code : '';
+  const description = (item as ProgramEntity).result || item.name;
+  const usage = item.usages?.length || 0;
+
+  const footnote =
+    item.type === 'program'
+      ? `${(item as ProgramEntity).objectiveCodes.length} obiective SMART`
+      : item.type === 'objective'
+        ? `${(item as ObjectiveEntity).programs.length} programe`
+        : `${usage} asocieri`;
+
+  return (
+    <article className="strategic-card" onClick={onOpen}>
+      <header>
+        {code ? <span className="entity-code">{code}</span> : null}
+        <span className={`coverage-badge ${usage ? 'covered' : 'gap'}`}>
+          {usage ? `${usage} campanii` : 'neacoperit'}
+        </span>
+      </header>
+      <h3>{item.name}</h3>
+      {isOfficial ? <p>{cut(description, 180)}</p> : null}
+      <footer>
+        <span>{footnote}</span>
+        <button type="button">Vezi fișa →</button>
+      </footer>
+    </article>
+  );
+}
+
+function CardGrid({
+  items,
+  dense,
+  onOpen,
+}: {
+  items: StrategyEntity[];
+  dense?: boolean;
+  onOpen: (item: StrategyEntity) => void;
+}) {
+  return (
+    <div className={dense ? 'strategic-card-grid dense' : 'strategic-card-grid'}>
+      {items.length ? (
+        items.map((item) => (
+          <EntityCard key={`${item.type}::${entityKey(item)}`} item={item} onOpen={() => onOpen(item)} />
+        ))
+      ) : (
+        <div className="empty">Nu există rezultate pentru filtrul curent.</div>
+      )}
+    </div>
+  );
+}
+
+function ProgramObjectiveCards({ model, query, programKind, onProgramKind, onOpenEntity }: ContentProps) {
+  const items = filterItems<StrategyEntity>(
+    programKind === 'programs' ? model.programs : model.objectives,
+    query,
+  );
+  return (
+    <>
+      <SubToggle
+        options={[
+          ['programs', 'Programe'],
+          ['objectives', 'Obiective SMART'],
+        ]}
+        current={programKind}
+        onChange={(value) => onProgramKind(value as ProgramKind)}
+      />
+      <CardGrid items={items} onOpen={(item) => onOpenEntity(item.type, entityKey(item))} />
+    </>
+  );
+}
+
+function AudienceProductCards({ model, query, audienceKind, onAudienceKind, onOpenEntity }: ContentProps) {
+  const items = filterItems<StrategyEntity>(
+    audienceKind === 'audiences' ? model.audiences : model.products,
+    query,
+  );
+  return (
+    <>
+      <SubToggle
+        options={[
+          ['audiences', 'Publicuri'],
+          ['products', 'Produse și experiențe'],
+        ]}
+        current={audienceKind}
+        onChange={(value) => onAudienceKind(value as AudienceKind)}
+      />
+      <CardGrid items={items} dense onOpen={(item) => onOpenEntity(item.type, entityKey(item))} />
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- matrices */
+
+function RelationCell({
+  role,
+  campaignId,
+  onOpenCampaign,
+}: {
+  role: RelationRole;
+  campaignId: string;
+  onOpenCampaign: (id: string) => void;
+}) {
+  return (
+    <td className={`relation-cell ${role || ''}`}>
+      {role ? (
+        <button type="button" title={relationTitle(role)} onClick={() => onOpenCampaign(campaignId)}>
+          {relationLabel(role)}
+        </button>
       ) : null}
+    </td>
+  );
+}
 
-      {tab === 'programs' ? (
-        <div className="campaign-full-view">
-          {data.programs.map((program) => {
-            const linked = data.programObjectives
-              .filter((link) => link.programCode === program.code)
-              .map((link) => link.objectiveCode);
-            const isEditing = editing?.kind === 'programs' && editing.code === program.code;
+function ProgramObjectiveMatrix({
+  model,
+  query,
+  programKind,
+  onProgramKind,
+  onOpenEntity,
+  onOpenCampaign,
+}: ContentProps) {
+  const isPrograms = programKind === 'programs';
+  const rows = filterItems<StrategyEntity>(isPrograms ? model.programs : model.objectives, query);
 
+  return (
+    <>
+      <SubToggle
+        options={[
+          ['programs', 'Programe'],
+          ['objectives', 'Obiective SMART'],
+        ]}
+        current={programKind}
+        onChange={(value) => onProgramKind(value as ProgramKind)}
+      />
+      <section className="matrix-card">
+        <header>
+          <div>
+            <small>Matrice generată din fișele campaniilor</small>
+            <h3>{isPrograms ? 'Programe × campanii' : 'Obiective SMART × campanii'}</h3>
+          </div>
+          <span>P = principal · S = secundar</span>
+        </header>
+        <div className="matrix-scroll">
+          <table className="relation-matrix">
+            <thead>
+              <tr>
+                <th>Reper</th>
+                {model.all.map((campaign) => (
+                  <th key={campaign.id} title={campaign.title}>
+                    {campaignLabel(campaign)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item) => {
+                const code = (item as ProgramEntity).code;
+                return (
+                  <tr key={code}>
+                    <th>
+                      <button type="button" onClick={() => onOpenEntity(item.type, code)}>
+                        <b>{code}</b>
+                        <span>{cut(item.name, 54)}</span>
+                      </button>
+                    </th>
+                    {model.all.map((campaign) => (
+                      <RelationCell
+                        key={campaign.id}
+                        role={isPrograms ? programRole(campaign, code) : objectiveRole(campaign, code)}
+                        campaignId={campaign.id}
+                        onOpenCampaign={onOpenCampaign}
+                      />
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AudienceProductMatrix({
+  model,
+  query,
+  audienceKind,
+  onAudienceKind,
+  onOpenEntity,
+  onOpenCampaign,
+}: ContentProps) {
+  const isAudiences = audienceKind === 'audiences';
+  const rows = filterItems<StrategyEntity>(isAudiences ? model.audiences : model.products, query);
+
+  return (
+    <>
+      <SubToggle
+        options={[
+          ['audiences', 'Publicuri'],
+          ['products', 'Produse și experiențe'],
+        ]}
+        current={audienceKind}
+        onChange={(value) => onAudienceKind(value as AudienceKind)}
+      />
+      <section className="matrix-card">
+        <header>
+          <div>
+            <small>Relații generate din fișele campaniilor</small>
+            <h3>{isAudiences ? 'Publicuri × campanii' : 'Produse × campanii'}</h3>
+          </div>
+          <span>
+            {isAudiences ? 'P = public principal · S = public secundar' : '● = produs utilizat'}
+          </span>
+        </header>
+        <div className="matrix-scroll">
+          <table className="relation-matrix">
+            <thead>
+              <tr>
+                <th>{isAudiences ? 'Public' : 'Produs / experiență'}</th>
+                {model.all.map((campaign) => (
+                  <th key={campaign.id} title={campaign.title}>
+                    {campaignLabel(campaign)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item) => {
+                const id = (item as DerivedEntity).id;
+                return (
+                  <tr key={id}>
+                    <th>
+                      <button type="button" onClick={() => onOpenEntity(item.type, id)}>
+                        <span>{cut(item.name, 62)}</span>
+                      </button>
+                    </th>
+                    {model.all.map((campaign) => {
+                      const usage = item.usages.find((entry) => entry.campaign.id === campaign.id);
+                      return (
+                        <RelationCell
+                          key={campaign.id}
+                          role={usage?.role || ''}
+                          campaignId={campaign.id}
+                          onOpenCampaign={onOpenCampaign}
+                        />
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ---------------------------------------------------------------- fișele */
+
+function EntityUsageCards({
+  item,
+  onOpenCampaign,
+}: {
+  item: StrategyEntity;
+  onOpenCampaign: (id: string) => void;
+}) {
+  if (!item.usages?.length) {
+    return <div className="empty-detail">Acest reper nu este încă asociat niciunei campanii.</div>;
+  }
+  return (
+    <div className="linked-campaigns">
+      {item.usages.map((usage) => (
+        <article key={usage.campaign.id}>
+          <div>
+            <span className={`role-mark ${usage.role}`}>{relationLabel(usage.role)}</span>
+            <div>
+              <strong>{usage.campaign.title}</strong>
+              <small>{relationTitle(usage.role)}</small>
+            </div>
+          </div>
+          <button className="btn secondary" type="button" onClick={() => onOpenCampaign(usage.campaign.id)}>
+            Deschide campania
+          </button>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ProgramDetail({
+  item,
+  model,
+  horizonYear,
+  onOpenEntity,
+  onOpenCampaign,
+}: {
+  item: ProgramEntity;
+  model: StrategyModel;
+  horizonYear: number | undefined;
+  onOpenEntity: (type: EntityType, id: string) => void;
+  onOpenCampaign: (id: string) => void;
+}) {
+  return (
+    <>
+      <section className="detail-hero">
+        <span>{item.code}</span>
+        <h2>{item.name}</h2>
+        <p>{item.result}</p>
+      </section>
+      <div className="detail-grid">
+        <section>
+          <h3>Obiectiv de marketing</h3>
+          <p>{item.marketingObjective}</p>
+        </section>
+        <section>
+          {/* The year comes from the active strategy version, not a literal,
+              so the heading survives the next strategic cycle. */}
+          <h3>{`Rezultat urmărit până în ${horizonYear}`}</h3>
+          <p>{item.horizonResult}</p>
+        </section>
+        <section>
+          <h3>Abordare</h3>
+          <p>{item.approach}</p>
+        </section>
+        <section>
+          <h3>Grupuri-țintă din matrice</h3>
+          <p>{item.targetGroups}</p>
+        </section>
+        <section>
+          <h3>KPI strategici</h3>
+          <p>{item.kpiText}</p>
+        </section>
+        <section>
+          <h3>Surse de date</h3>
+          <p>{item.sources}</p>
+        </section>
+      </div>
+      <section className="detail-section">
+        <h3>Obiective SMART asociate în matrice</h3>
+        <div className="entity-tags">
+          {item.objectiveCodes.map((code) => {
+            const objective = model.objectives.find((entry) => entry.code === code);
             return (
-              <section className="campaign-full-section" key={program.code}>
-                <header>
-                  <b>{program.code}</b>
-                  <h3>{program.name}</h3>
-                </header>
-                <div className="campaign-full-section-body">
-                  {isEditing ? (
-                    <>
-                      <label className="form-field">
-                        <span className="form-label">Denumire</span>
-                        <input
-                          value={draft.name ?? ''}
-                          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                        />
-                      </label>
-                      <label className="form-field">
-                        <span className="form-label">Rezultat urmărit</span>
-                        <textarea
-                          rows={2}
-                          value={draft.result ?? ''}
-                          onChange={(e) => setDraft({ ...draft, result: e.target.value })}
-                        />
-                      </label>
-                      <label className="form-field">
-                        <span className="form-label">Obiectiv de marketing</span>
-                        <textarea
-                          rows={2}
-                          value={draft.marketingObjective ?? ''}
-                          onChange={(e) => setDraft({ ...draft, marketingObjective: e.target.value })}
-                        />
-                      </label>
-                      <div className="wizard-actions">
-                        <button className="btn secondary" type="button" onClick={() => setEditing(null)}>
-                          Renunță
-                        </button>
-                        <button
-                          className="btn primary"
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void save('programs', program.code)}
-                        >
-                          Salvează
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <table className="table">
-                        <tbody>
-                          <tr>
-                            <th>Rezultat urmărit</th>
-                            <td>{program.result || '—'}</td>
-                          </tr>
-                          <tr>
-                            <th>Obiectiv de marketing</th>
-                            <td>{program.marketingObjective || '—'}</td>
-                          </tr>
-                          <tr>
-                            <th>Abordare</th>
-                            <td>{program.approach || '—'}</td>
-                          </tr>
-                          <tr>
-                            <th>Rezultat pe orizont</th>
-                            <td>{program.horizonResult || '—'}</td>
-                          </tr>
-                          <tr>
-                            <th>Obiective asociate</th>
-                            <td>
-                              <div className="badges">
-                                {linked.length ? (
-                                  linked.map((code) => (
-                                    <span className="badge" key={code}>
-                                      {code}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="muted-copy">—</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <th>Utilizat în</th>
-                            <td>{program.usageCount} campanii</td>
-                          </tr>
-                        </tbody>
-                      </table>
-
-                      {isAdmin ? (
-                        <button
-                          className="btn secondary"
-                          type="button"
-                          onClick={() => {
-                            setEditing({ kind: 'programs', code: program.code });
-                            setDraft({
-                              name: program.name,
-                              label: program.label,
-                              result: program.result,
-                              marketingObjective: program.marketingObjective,
-                              approach: program.approach,
-                              horizonResult: program.horizonResult,
-                              targetGroups: program.targetGroups,
-                              kpiText: program.kpiText,
-                              sources: program.sources,
-                              annualActions: program.annualActions,
-                              validationStatus: program.validationStatus,
-                            });
-                          }}
-                        >
-                          Editează programul
-                        </button>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              </section>
+              <button key={code} type="button" onClick={() => onOpenEntity('objective', code)}>
+                <b>{code}</b>
+                <span>{objective?.name || ''}</span>
+              </button>
             );
           })}
         </div>
-      ) : null}
+      </section>
+      <section className="detail-section">
+        <h3>Campanii care operaționalizează programul</h3>
+        <EntityUsageCards item={item} onOpenCampaign={onOpenCampaign} />
+      </section>
+    </>
+  );
+}
 
-      {tab === 'versions' ? (
-        <section className="activation-list-card">
-          <div className="activation-list-count">
-            <strong>{versions.length} versiuni strategice</strong>
-            <span>
-              Codurile sunt unice per versiune: același cod poate însemna altceva într-un alt ciclu
-              strategic, iar campaniile istorice își păstrează contextul.
-            </span>
-          </div>
-          <div className="activation-table-scroll">
-            <table className="activation-list-table">
-              <thead>
-                <tr>
-                  <th>Versiune</th>
-                  <th>Denumire</th>
-                  <th>Perioadă</th>
-                  <th>Stare</th>
-                  <th>Campanii</th>
-                  <th>Repere</th>
-                  {isAdmin ? <th /> : null}
-                </tr>
-              </thead>
+function ObjectiveDetail({
+  item,
+  onOpenEntity,
+  onOpenCampaign,
+}: {
+  item: ObjectiveEntity;
+  onOpenEntity: (type: EntityType, id: string) => void;
+  onOpenCampaign: (id: string) => void;
+}) {
+  return (
+    <>
+      <section className="detail-hero">
+        <span>{item.code}</span>
+        <h2>{item.name}</h2>
+        <p>{`Sursă oficială: ${item.source}`}</p>
+      </section>
+      <section className="detail-section">
+        <h3>Programe strategice în care apare</h3>
+        <div className="entity-tags">
+          {item.programs.length ? (
+            item.programs.map((program) => (
+              <button key={program.code} type="button" onClick={() => onOpenEntity('program', program.code)}>
+                <b>{program.code}</b>
+                <span>{program.name}</span>
+              </button>
+            ))
+          ) : (
+            <p className="muted-copy">Nu este asociat unui program din matricea de marketing.</p>
+          )}
+        </div>
+      </section>
+      <section className="detail-section">
+        <h3>Acoperire prin campanii</h3>
+        <EntityUsageCards item={item} onOpenCampaign={onOpenCampaign} />
+      </section>
+    </>
+  );
+}
+
+function AudienceProductDetail({
+  item,
+  onOpenCampaign,
+}: {
+  item: DerivedEntity;
+  onOpenCampaign: (id: string) => void;
+}) {
+  const isAudience = item.type === 'audience';
+  return (
+    <>
+      <section className="detail-hero">
+        <span>{isAudience ? 'PUBLIC' : 'PRODUS / EXPERIENȚĂ'}</span>
+        <h2>{item.name}</h2>
+        <p>
+          {item.usages.length
+            ? `Utilizat în ${item.usages.length} campanii.`
+            : 'Nefolosit în portofoliul actual de campanii.'}
+        </p>
+      </section>
+      <section className="detail-section">
+        <h3>Relații cu portofoliul</h3>
+        {item.usages.length ? (
+          <div className="matrix-scroll">
+            <table className="table wide">
               <tbody>
-                {versions.map((version) => (
-                  <tr key={version.id}>
+                <tr>
+                  <th>Campanie</th>
+                  <th>Rol</th>
+                  <th>{isAudience ? 'Insight / motivație' : 'Condiții de utilizare'}</th>
+                </tr>
+                {item.usages.map((usage) => (
+                  <tr key={usage.campaign.id}>
                     <td>
-                      <code>{version.id}</code>
+                      <button
+                        className="table-link"
+                        type="button"
+                        onClick={() => onOpenCampaign(usage.campaign.id)}
+                      >
+                        {usage.campaign.title}
+                      </button>
                     </td>
-                    <td>{version.label}</td>
-                    <td>
-                      {version.periodStartYear}–{version.periodEndYear}
-                    </td>
-                    <td>
-                      <span className={version.status === 'ACTIVE' ? 'badge status' : 'badge'}>
-                        {version.status}
-                      </span>
-                    </td>
-                    <td>{version.campaignCount}</td>
-                    <td>
-                      {version.pillarCount} / {version.programCount} / {version.objectiveCount}
-                    </td>
-                    {isAdmin ? (
-                      <td>
-                        {version.status !== 'ACTIVE' ? (
-                          <button
-                            className="btn secondary"
-                            type="button"
-                            onClick={() => void activateVersion(version.id)}
-                          >
-                            Activează
-                          </button>
-                        ) : (
-                          <span className="muted-copy">versiunea curentă</span>
-                        )}
-                      </td>
-                    ) : null}
+                    <td>{relationTitle(usage.role)}</td>
+                    <td>{usage.insight || usage.condition || ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
-      ) : null}
+        ) : (
+          <div className="empty-detail">
+            Reperul există în nomenclator, dar nu este încă asociat unei campanii.
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function KpiSourceDetail({
+  item,
+  onOpenCampaign,
+}: {
+  item: DerivedEntity;
+  onOpenCampaign: (id: string) => void;
+}) {
+  return (
+    <>
+      <section className="detail-hero">
+        <span>{item.type === 'kpi' ? 'KPI' : 'SURSĂ DE DATE'}</span>
+        <h2>{item.name}</h2>
+        <p>Relațiile și valorile sunt agregate automat din fișele campaniilor.</p>
+      </section>
+      <section className="detail-section">
+        <h3>Utilizare în campanii</h3>
+        {item.usages.length ? (
+          <div className="matrix-scroll">
+            <table className="table wide">
+              <tbody>
+                <tr>
+                  <th>Campanie</th>
+                  <th>Baseline</th>
+                  <th>Țintă</th>
+                  <th>Sursă</th>
+                </tr>
+                {item.usages.map((usage, index) => (
+                  <tr key={`${usage.campaign.id}-${index}`}>
+                    <td>
+                      <button
+                        className="table-link"
+                        type="button"
+                        onClick={() => onOpenCampaign(usage.campaign.id)}
+                      >
+                        {usage.campaign.title}
+                      </button>
+                    </td>
+                    <td>{usage.metric?.baseline || '—'}</td>
+                    <td>{usage.metric?.target || '—'}</td>
+                    <td>{usage.metric?.source || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-detail">Nu există utilizări în portofoliul actual.</div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function DetailView(props: ContentProps) {
+  const { model, payload, tab, query, programKind, audienceKind, selected, onSelect } = props;
+
+  const pool: StrategyEntity[] =
+    tab === 'programs'
+      ? programKind === 'programs'
+        ? model.programs
+        : model.objectives
+      : tab === 'audiences'
+        ? audienceKind === 'audiences'
+          ? model.audiences
+          : model.products
+        : [...model.programs, ...model.objectives];
+
+  const entities = filterItems(pool, query);
+
+  // The selection survives tab and filter changes when it still exists; when it
+  // does not, the first entity in the current pool takes over.
+  let item =
+    pool.find((entry) => entityKey(entry) === selected.id && entry.type === selected.type) ?? pool[0];
+  if (query && item && !entities.includes(item)) item = entities[0] ?? item;
+
+  if (!item) return <div className="empty">Nu există repere disponibile.</div>;
+
+  const currentKey = `${item.type}::${entityKey(item)}`;
+
+  return (
+    <>
+      <div className="detail-selector">
+        <label>
+          Reper afișat
+          <select
+            value={currentKey}
+            onChange={(event) => {
+              const [type, id] = event.target.value.split('::');
+              onSelect({ type: type as EntityType, id: id ?? '' });
+            }}
+          >
+            {entities.map((entity) => {
+              const key = entityKey(entity);
+              const code = 'code' in entity ? entity.code : '';
+              return (
+                <option key={`${entity.type}::${key}`} value={`${entity.type}::${key}`}>
+                  {(code ? `${code} – ` : '') + entity.name}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <span>Fișa este generată din nomenclator și din campaniile actuale.</span>
+      </div>
+
+      <article className="strategic-detail">
+        {item.type === 'program' ? (
+          <ProgramDetail
+            item={item as ProgramEntity}
+            model={model}
+            horizonYear={payload.version?.periodEndYear}
+            onOpenEntity={props.onOpenEntity}
+            onOpenCampaign={props.onOpenCampaign}
+          />
+        ) : item.type === 'objective' ? (
+          <ObjectiveDetail
+            item={item as ObjectiveEntity}
+            onOpenEntity={props.onOpenEntity}
+            onOpenCampaign={props.onOpenCampaign}
+          />
+        ) : item.type === 'audience' || item.type === 'product' ? (
+          <AudienceProductDetail item={item as DerivedEntity} onOpenCampaign={props.onOpenCampaign} />
+        ) : (
+          <KpiSourceDetail item={item as DerivedEntity} onOpenCampaign={props.onOpenCampaign} />
+        )}
+      </article>
     </>
   );
 }

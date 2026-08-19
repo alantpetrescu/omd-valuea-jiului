@@ -80,10 +80,45 @@ Health check: `GET http://localhost:3000/api/v1/health` → `{"status":"ok"}`.
 - [x] Stage 2 (partial) — activation write API and editor (create/edit)
 - [x] Stage 3 — Plan anual (read + manual selection)
 - [x] Stage 4 — Monitorizare activări and Monitorizare reputație
-- [x] Stage 5 — Repere strategice (read + ADMIN edit, version activation)
-- [x] Stage 5 — Administrare: users, catalogs with deletion policy, imports, audit
+- [x] Stage 5 — Repere strategice rebuilt to match the v13.3 prototype (see below)
+- [x] Stage 5 — Administrare: users, catalogs, strategy, imports, audit
 - [x] Stage 5 — soft delete with dependency checks, change password, About
 - [ ] Stage 2 — preview/commit import endpoints (ADMIN only)
+
+## Repere strategice — parity with the prototype
+
+The screen is the prototype's, not an approximation of it: three tabs
+(Sinteză / Programe și obiective / Publicuri și produse), three view modes
+(Matrice / Carduri / Fișă), the same aggregation rules, the same markup and
+class names. `frontend/src/features/strategy/strategyModel.ts` holds the pure
+model ported from `OMD.strategic`; the page is presentation only.
+
+The screen is read-only for every role, ADMIN included, so it is the prototype
+with no exceptions. Editing the strategic repere moved to
+`Administrare → Strategie` — strategy versions, pillars, programs and
+objectives, in one place. That placement departs from README_PROGRAMMER §5.1
+and spec §11.8 at the client's request; it is recorded as **D-002** in
+`KNOWN_DEVIATIONS.md`.
+
+What the campaigns contribute to this screen — publicuri, produse, KPI, surse —
+is not editable anywhere on it by design. Those are a projection of the campaign
+fiches, and `campaigns.products` in particular is free narrative text rather
+than a nomenclature reference (risk review §10). Edit them on the campaign.
+
+`GET /api/v1/strategy` grew two fields for this screen: `audiences` (the whole
+nomenclature, so an unused public still counts against coverage) and
+`campaigns` (per-campaign programme/objective/audience relations with their
+role, plus products and KPI definitions). A `usageCount` cannot drive the
+matrices — they need to know *which* campaign, with *what* role.
+
+```bash
+cd frontend && npm run test:parity
+```
+
+Drives both applications through 22 states and compares them pixel by pixel.
+Last run: 12/12 static, 10/10 interactive, 0 differing pixels; 12/12 as ADMIN
+too; 3/3 role gate; 14/14 Administrare → Strategie; 6/6 stale-API. See
+`frontend/tests/visual-parity/README.md`.
 
 ## Deployment on a tailnet
 

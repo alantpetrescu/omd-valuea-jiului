@@ -7,6 +7,25 @@
   text-decoration: none;
 }
 
+/* Rendered while the account still carries a temporary password. These are
+   <span>s, not links — the point is that they cannot be clicked at all, rather
+   than being clickable and doing nothing. */
+.nav.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.state-note.locked-note {
+  border-color: var(--accent, #b8860b);
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.state-note.locked-note strong {
+  color: var(--ink);
+}
+
 .boot-screen {
   display: flex;
   align-items: center;
@@ -359,4 +378,82 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* Administrare → Strategie.
+
+   The shared list table is sized for the Activări screen, where `min-width:
+   1340px` is right — that grid genuinely has that many columns. These two
+   tables have five, so the same rule only pushes the row actions past the edge
+   of the scroll container, where nobody finds them. */
+.activation-list-table.admin-narrow-table {
+  min-width: 0;
+}
+
+/* ---- Activation editor: spacing between steps' sections ----
+
+   The prototype has no `.activation-section` rule at all — its two Planificare
+   sections sit flush, separated only by the next head's own border. This adds
+   breathing room between any two consecutive sections, in every step. It is an
+   addition to the lifted design, not a correction of it, which is why it lives
+   here rather than in prototype.css. */
+
+#activationEditorContent .activation-section + .activation-section {
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* The campaign card is not a click target.
+
+   prototype.css:309 sets `cursor:pointer` on `.card`, which is honest there:
+   the prototype's body-level click handler ran `e.target.closest('.card')` and
+   opened whichever card you hit, anywhere on it. This app routes that intent
+   through the two buttons instead, and the <article> carries no handler — so
+   the pointer cursor was promising a click that never happens.
+
+   `.btn` sets its own `cursor:pointer`, so "Deschide campania" and "＋ Activare"
+   keep it without needing anything here. app.css loads after prototype.css and
+   the selector has equal specificity, so load order alone decides this. */
+.card {
+  cursor: default;
+}
+
+/* MultiPicker with no suggestion catalogue.
+
+   prototype.css:559 lays .multi-picker out as `1.1fr .9fr` because the
+   prototype always had both boxes: a catalogue on the left, the selection on
+   the right. "Elemente fixe" and "Limite de adaptare" have no catalogue, so
+   only the selection box renders and the second column would sit empty. */
+.multi-picker.single {
+  grid-template-columns: 1fr;
+}
+
+/* Selected objectives.
+
+   prototype.css gives `.objective` only a `:hover` border — a chosen objective
+   in the left-hand list looks exactly like an unchosen one, so the only feedback
+   is the item appearing in one of the boxes on the right. The programs list does
+   not have that problem: it reuses `.chip`, and `.chip.selected` fills with the
+   brand colour.
+
+   These mirror `.chip.selected` so both lists in "Încadrare strategică" answer
+   "what have I already picked?" the same way. `.objective` is a <button> here
+   rather than the prototype's <div>, so the reset below keeps the list items
+   looking identical to before while making them focusable. */
+.objective {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.objective.selected {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.objective.selected:hover {
+  border-color: var(--brand);
 }

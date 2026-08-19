@@ -5,14 +5,15 @@
   "description": "OMD Valea Jiului \u2014 Sistem digital de marketing (backend API)",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --clear-screen=false src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "migrate": "tsx src/database/migrate.ts",
     "migrate:status": "tsx src/database/migrate.ts --status",
     "seed:technical": "tsx src/database/seed-technical.ts",
-    "import": "tsx src/imports/cli.ts"
+    "import": "tsx src/imports/cli.ts",
+    "dev:fast": "npm run build && node dist/server.js"
   },
   "engines": {
     "node": ">=20"

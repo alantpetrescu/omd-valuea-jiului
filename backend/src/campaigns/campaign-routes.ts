@@ -20,6 +20,7 @@ import { requireAuth, requireWriteAccess, requireRole } from '../auth/middleware
 import { assessCampaignDeletion, restoreEntity, softDeleteCampaign } from '../shared/deletion-policy';
 import { asyncHandler, pageMeta, readPagination, sendData, ApiError } from '../shared/http';
 import { loadCampaignActivations, loadCampaignDetail } from './campaign-detail';
+import { exportCampaign, type VisualMode } from './campaign-export';
 import { CampaignInput, createCampaign, updateCampaign } from './campaign-write';
 
 export const campaignRouter = Router();
@@ -190,6 +191,54 @@ campaignRouter.put(
     const externalKey = String(req.params.externalKey);
     await updateCampaign(externalKey, parsed.data, expectedVersion, req.user?.id ?? null);
     sendData(res, await loadCampaignDetail(externalKey));
+  }),
+);
+
+/**
+ * Contract-shaped export of one campaign.
+ *
+ *   GET /api/v1/campaigns/:externalKey/export
+ *   GET /api/v1/campaigns/:externalKey/export?visuals=link
+ *
+ * Returns a complete OMD_CAMPAIGNS_PACKAGE v1.0 — not a bare campaign object,
+ * because a campaign references its strategy and catalogues by code and those
+ * codes are only meaningful alongside the tables that define them (spec 31).
+ *
+ *  (default) inlines every template visual as a base64 data URI,
+ * which is what the importer reads, so the file round-trips. 
+ * emits public URLs instead: far smaller, useful for inspection, and NOT
+ * importable. The response says which one it is.
+ */
+campaignRouter.get(
+  '/campaigns/:externalKey/export',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const visuals: VisualMode = req.query.visuals === 'link' ? 'link' : 'embed';
+    const externalKey = String(req.params.externalKey);
+
+    const result = await exportCampaign(externalKey, visuals);
+    if (!result) throw ApiError.notFound('Campania nu a fost gasita.');
+
+    // The export is only useful if it can be read back. Refusing a package that
+    // fails its own contract is better than handing over a file that will be
+    // rejected at import time, when the original may no longer exist.
+    if (visuals === 'embed' && result.validationErrors.length > 0) {
+      throw new ApiError(
+        'INTERNAL_ERROR',
+        'Exportul nu respecta contractul OMD_CAMPAIGNS_PACKAGE si a fost oprit.',
+        result.validationErrors.slice(0, 20),
+      );
+    }
+
+    sendData(res, result.package, {
+      visuals,
+      importable: visuals === 'embed',
+      contractValid: result.validationErrors.length === 0,
+      assetCount: result.assetCount,
+      missingAssets: result.missingAssets,
+      // The requested campaign plus the lineage it needs to be importable.
+      campaignKeys: result.campaignKeys,
+    });
   }),
 );
 

@@ -54,11 +54,20 @@ export function ChangePasswordPage() {
           <h1>Schimbă parola</h1>
           <p>
             {user?.mustChangePassword
-              ? 'Contul folosește o parolă temporară. Alege una proprie pentru a continua.'
+              ? 'Contul folosește o parolă temporară.'
               : 'Parola se schimbă imediat; sesiunea curentă rămâne activă.'}
           </p>
         </div>
       </header>
+
+      {user?.mustChangePassword ? (
+        <div className="state-note locked-note" role="status">
+          <strong>Restul aplicației este blocat până alegi o parolă proprie.</strong>
+          <br />
+          Administratorul ți-a creat contul cu o parolă temporară. Completează formularul de mai
+          jos, iar meniul din stânga se deblochează imediat.
+        </div>
+      ) : null}
 
       <form className="wizard-body" onSubmit={submit}>
         <label className="form-field">

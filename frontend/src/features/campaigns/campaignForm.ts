@@ -113,6 +113,26 @@ export const MONTH_LABELS = [
   'Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 'Iul', 'Aug', 'Sep', 'Oct', 'Noi', 'Dec',
 ];
 
+/**
+ * Common adaptable elements, from the prototype's `config.adaptableOptions`.
+ *
+ * Not a database catalogue: `adaptable_elements` is a free-text column on the
+ * campaign, and these are only the suggestions the picker offers. An author can
+ * type anything else alongside them.
+ */
+export const ADAPTABLE_OPTIONS: Array<{ value: string; hint: string }> = [
+  { value: 'Sezonul și perioada', hint: 'Momentul din an sau fereastra concretă de activare.' },
+  { value: 'Publicul și nivelul de detaliu', hint: 'Mesajele și utilitatea se adaptează segmentului.' },
+  { value: 'Produsul sau experiența', hint: 'Se selectează numai produse validate și disponibile.' },
+  { value: 'Canalul și formatul', hint: 'Postare, video, articol, itinerar, eveniment sau material B2B.' },
+  { value: 'Localitatea, zona sau traseul', hint: 'Accentul geografic se poate schimba fără fragmentarea brandului.' },
+  { value: 'Partenerii implicați', hint: 'Operatori, UAT-uri, ONG-uri, ghizi, comunități și organizatori.' },
+  { value: 'CTA-ul', hint: 'Acțiunea cerută se adaptează etapei și canalului.' },
+  { value: 'Bugetul și intensitatea media', hint: 'Scara activării poate varia fără schimbarea conceptului.' },
+  { value: 'Mesajele secundare', hint: 'Pot varia dacă păstrează ideea centrală și promisiunea.' },
+  { value: 'Contextul concret al activării', hint: 'Eveniment, weekend, lansare, produs sau piață specifică.' },
+];
+
 export function emptyForm(defaults: {
   typeCode?: string;
   statusCode?: string;
@@ -245,9 +265,21 @@ export function validateStep(
 }
 
 /** Maps wizard state onto the API contract. */
+/**
+ * Blank-free, trimmed lines.
+ *
+ * The list textareas report raw lines while the author is typing - that is what
+ * lets a space be typed at all - and tidy up on blur. Blur fires before the
+ * click that saves, so this is belt and braces rather than the main path.
+ */
+const lines = (values: string[]): string[] => values.map((value) => value.trim()).filter(Boolean);
+
 export function toApiPayload(form: CampaignFormState): Record<string, unknown> {
   return {
     ...form,
+    strategicContribution: lines(form.strategicContribution),
+    secondaryMessages: lines(form.secondaryMessages),
+    storytellingDirections: lines(form.storytellingDirections),
     kpiDefinitions: form.kpiDefinitions.filter((m) => m.name.trim()),
     applicationExamples: form.applicationExamples.filter((x) => x.context.trim()),
     headlines: form.headlines.filter((x) => x.headline.trim()),
