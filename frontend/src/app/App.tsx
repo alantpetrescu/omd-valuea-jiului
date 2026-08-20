@@ -79,7 +79,15 @@ function Gate() {
 
 export function App() {
   return (
-    <BrowserRouter>
+    /*
+     * The router's base is Vite's base, not a second setting.
+     *
+     * `import.meta.env.BASE_URL` is whatever `base` was at build time: `/` for a
+     * root deployment, `/app/` when built for one. Keeping them as two
+     * independent settings would mean keeping them in agreement by hand, and the
+     * symptom when they drift is a blank page whose asset URLs all look right.
+     */
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <AuthProvider>
         <Gate />
       </AuthProvider>
