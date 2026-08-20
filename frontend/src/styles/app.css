@@ -457,3 +457,51 @@
 .objective.selected:hover {
   border-color: var(--brand);
 }
+
+/* Delete, in the row-action icon set.
+
+   `prototype.css` ships `.activation-icon-btn` and a `.results` variant; the
+   prototype has no delete button, so there is no danger variant to lift. This
+   adds one rather than reusing the neutral style: three identical squares where
+   the third destroys something is a design that gets clicked by accident. The
+   idle state stays neutral so the row does not read as dangerous at rest — only
+   the hover commits. */
+.activation-icon-btn.danger:hover {
+  background: #fbf2f2;
+  border-color: #e4cdcd;
+  color: var(--danger);
+}
+
+.activation-icon-btn.danger:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+/* A row action that cannot succeed, shown rather than hidden.
+
+   Hiding it would make the column jump between rows and leave no explanation;
+   disabled keeps the layout steady and the tooltip carries the reason. */
+.activation-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.activation-icon-btn:disabled:hover {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--brand);
+  transform: none;
+}
+
+
+/* A page whose subtitle is a little longer than the shared measure.
+
+   `.page-head p` is capped at 660px, which is a sensible line length and is
+   left alone. On Activări the sentence needs 688px, so it wrapped for the sake
+   of 28 pixels while 900+ sat empty beside it. The cap is raised here only, and
+   only far enough: the line still stops well before the full width, and still
+   wraps on a narrow window, which is the right behaviour. */
+.page-head.wide-lede p {
+  max-width: 760px;
+}

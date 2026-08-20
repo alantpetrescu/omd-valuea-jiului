@@ -283,6 +283,20 @@ export function toApiPayload(form: CampaignFormState): Record<string, unknown> {
     kpiDefinitions: form.kpiDefinitions.filter((m) => m.name.trim()),
     applicationExamples: form.applicationExamples.filter((x) => x.context.trim()),
     headlines: form.headlines.filter((x) => x.headline.trim()),
+    /*
+     * The editor appends one blank row to every repeatable table so there is
+     * always somewhere to type, and each has to be dropped again on save. This
+     * one was missed — the only one of the six — so every save added another
+     * empty deliverable; a campaign edited seven times carried seven of them.
+     *
+     * That is worse than clutter. `hasFramework` in CampaignDetailPage decides
+     * from this array's length whether a campaign is an umbrella one, and an
+     * umbrella campaign renders its deliverables instead of its templates. Blank
+     * rows therefore hid every mockup and visual the campaign had.
+     */
+    frameworkDeliverables: form.frameworkDeliverables.filter(
+      (x) => x.name.trim() || x.content.trim() || x.format.trim(),
+    ),
     mockups: undefined,
     activationDirections: undefined,
     activationExamples: {

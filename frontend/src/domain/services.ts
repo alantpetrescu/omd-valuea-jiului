@@ -201,6 +201,23 @@ function monthRuns(months: number[] | null | undefined): Array<[number, number]>
  * seasons rather than the one that wraps. The special case below joins them the
  * way a reader means it: "Noiembrie–martie".
  */
+/**
+ * The seasonality months as contiguous bands, zero-based — `OMD.seasonality.bands()`.
+ *
+ * The annual calendar places each band with `grid-column: from+1 / to+2`, so it
+ * needs the runs rather than the month list. Zero-based because that is what a
+ * grid column index wants; `monthRuns` keeps the 1–12 form the database stores.
+ *
+ * A wrapping winter stays two bands here on purpose: the calendar draws January
+ * and November as separate stretches of the same year, which is what they are.
+ * Only the label joins them.
+ */
+export function seasonalityBands(
+  months: number[] | null | undefined,
+): Array<{ from: number; to: number }> {
+  return monthRuns(months).map(([from, to]) => ({ from: from - 1, to: to - 1 }));
+}
+
 export function seasonalityPeriodLabel(months: number[] | null | undefined): string {
   const runs = monthRuns(months);
   const total = runs.reduce((sum, [from, to]) => sum + (to - from + 1), 0);

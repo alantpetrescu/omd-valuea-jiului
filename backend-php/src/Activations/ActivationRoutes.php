@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 namespace Omd\Activations;
 
+use Omd\Assets\Storage;
 use Omd\Auth\Guard;
 use Omd\Campaigns\CampaignRoutes;
 use Omd\Database\Db;
@@ -292,20 +293,38 @@ final class ActivationRoutes
         $row = Db::one('SELECT id FROM activations WHERE external_key = ?', [$externalKey]);
         $id = (string) $row['id'];
 
+        /*
+         * The visual comes from either place a material can keep one: an asset
+         * it owns, or one it reuses from a campaign template. COALESCE prefers
+         * the owned asset — a material given its own visual is not showing the
+         * template's.
+         *
+         * Without this the fiche could only ever say "vizual neîncărcat", since
+         * nothing in the payload pointed at the file.
+         */
         $materials = Db::rows(
             "SELECT m.external_key AS id, m.title, m.channel_raw AS channel, m.format_text AS format,
                     m.other_channel AS otherChannel,
                     m.budget_allocated AS budgetAllocated, m.run_start_date AS runStartDate,
                     m.run_end_date AS runEndDate, m.public_url AS publicUrl, m.copy_text AS copy,
                     m.visual_name AS visualName, m.visual_canva_url AS visualCanvaUrl,
-                    m.platform_external_id AS platformExternalId
+                    m.platform_external_id AS platformExternalId,
+                    COALESCE(own.storage_path, tpl.storage_path) AS visualStoragePath
                FROM activation_materials m
+               LEFT JOIN assets own ON own.id = m.own_asset_id
+               LEFT JOIN campaign_template_assets cta ON cta.id = m.campaign_template_asset_id
+               LEFT JOIN assets tpl ON tpl.id = cta.asset_id
               WHERE m.activation_id = ? AND m.deleted_at IS NULL
               ORDER BY m.run_start_date, m.title",
             [$id],
         );
         foreach ($materials as &$material) {
             $material['budgetAllocated'] = Db::decimal($material['budgetAllocated']);
+            $path = $material['visualStoragePath'] ?? null;
+            $material['visualUrl'] = is_string($path) && $path !== ''
+                ? Storage::publicUrl($path)
+                : null;
+            unset($material['visualStoragePath']);
         }
         unset($material);
 

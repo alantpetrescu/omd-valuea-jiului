@@ -55,6 +55,15 @@ interface MaterialRow {
   visualName: string;
   visualCanvaUrl: string;
   platformExternalId: string;
+  /**
+   * The stored image, when the material has one — read-only here.
+   *
+   * Resolved server-side from the material's own asset or the campaign template
+   * asset it reuses. It is shown, never edited: there is no upload endpoint in
+   * either backend. Carrying it in the form is harmless because the write path
+   * picks its keys explicitly and ignores anything else.
+   */
+  visualUrl: string | null;
 }
 
 interface KpiRow {
@@ -167,6 +176,7 @@ const EMPTY_MATERIAL: MaterialRow = {
   visualName: '',
   visualCanvaUrl: '',
   platformExternalId: '',
+  visualUrl: null,
 };
 
 const RECOMMENDATIONS = ['De stabilit', 'Repetare', 'Optimizare', 'Testare suplimentară', 'Oprire'];
@@ -358,6 +368,7 @@ export function ActivationEditor() {
             visualName: m.visualName ?? '',
             visualCanvaUrl: m.visualCanvaUrl ?? '',
             platformExternalId: m.platformExternalId ?? '',
+            visualUrl: m.visualUrl ?? null,
           })),
           kpis: (data.kpis ?? []).map((k: any) => ({
             id: k.id,
@@ -1234,10 +1245,33 @@ export function ActivationEditor() {
 
                     <div className="material-editor-grid">
                       <div className="material-visual-editor">
-                        <div className="empty-material-visual">
-                          <b>▧</b>
-                          <span>{material.visualName || 'Fără vizual atașat'}</span>
-                        </div>
+                        {/* The prototype renders the image when there is one and
+                            the ▧ box when there is not. This showed the box
+                            unconditionally, so a material that had a visual —
+                            its own, or one inherited from a campaign template —
+                            still looked empty while editing it.
+
+                            The stylesheet already sizes the image (150px tall,
+                            object-fit: cover, bordered), so nothing was needed
+                            beyond rendering the element. */}
+                        {material.visualUrl ? (
+                          <a
+                            href={material.visualUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Deschide vizualul la dimensiune completă"
+                          >
+                            <img
+                              src={material.visualUrl}
+                              alt={material.visualName || material.title || 'Vizual material'}
+                            />
+                          </a>
+                        ) : (
+                          <div className="empty-material-visual">
+                            <b>▧</b>
+                            <span>{material.visualName || 'Fără vizual atașat'}</span>
+                          </div>
+                        )}
                         <label className="label" style={{ marginTop: 10 }}>
                           Denumirea vizualului
                         </label>

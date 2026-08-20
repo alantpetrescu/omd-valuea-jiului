@@ -99,7 +99,17 @@ final class AnnualPlanRoutes
                     im.label AS implementationMode,
                     c.external_key AS campaignId, c.title AS campaignTitle,
                     (SELECT COALESCE(SUM(f.amount), 0) FROM activation_funding_sources f
-                      WHERE f.activation_id = a.id) AS fundingTotal
+                      WHERE f.activation_id = a.id) AS fundingTotal,
+                    /*
+                     * The distinct funding types behind that total, so the plan
+                     * can be filtered by source. The sum alone cannot answer
+                     * "show me what a partner is paying for" — it says how much,
+                     * never from where.
+                     */
+                    (SELECT GROUP_CONCAT(DISTINCT ft.label ORDER BY ft.label SEPARATOR \'|\')
+                       FROM activation_funding_sources f
+                       JOIN funding_types ft ON ft.id = f.funding_type_id
+                      WHERE f.activation_id = a.id) AS fundingTypesRaw
                FROM annual_plan_activations apa
                JOIN activations a ON a.id = apa.activation_id
                JOIN campaign_statuses st ON st.id = a.status_id
@@ -113,6 +123,15 @@ final class AnnualPlanRoutes
             $activation['plannedBudget'] = Db::decimal($activation['plannedBudget']);
             $activation['actualSpend'] = Db::decimal($activation['actualSpend']);
             $activation['fundingTotal'] = Db::decimal($activation['fundingTotal']);
+
+            // GROUP_CONCAT returns one delimited string, or NULL for none. The
+            // API contract is a list either way, so the client never has to
+            // know the join produced it.
+            $raw = $activation['fundingTypesRaw'] ?? null;
+            $activation['fundingTypes'] = is_string($raw) && $raw !== ''
+                ? explode('|', $raw)
+                : [];
+            unset($activation['fundingTypesRaw']);
         }
         unset($activation);
 

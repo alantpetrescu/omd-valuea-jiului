@@ -9,7 +9,7 @@
  * is derived data and is never stored (spec section 27).
  */
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   formatDateTime,
@@ -28,6 +28,8 @@ import {
   type ActivationListItem,
 } from './useActivations';
 import { ActivationCalendar } from './ActivationCalendar';
+import { ActivationDrawer } from './ActivationDrawer';
+import { CampaignDrawer } from '../campaigns/CampaignDrawer';
 
 function statusClass(code: string): string {
   if (code === 'ACTIVE') return 'active';
@@ -52,24 +54,138 @@ function ResultState({ item }: { item: ActivationListItem }) {
   );
 }
 
-function ActivationRow({ item }: { item: ActivationListItem }) {
+/*
+ * Row action icons.
+ *
+ * Geometry and class names are the prototype's, so `.activation-icon-btn` from
+ * the lifted stylesheet applies with nothing added: 36px square, 17px stroked
+ * glyph, tooltip drawn by CSS from `data-tooltip`.
+ *
+ * `title` duplicates `data-tooltip` on purpose: the CSS tooltip is invisible to
+ * a screen reader, and `aria-label` carries the same words again for one that
+ * ignores both.
+ */
+const ICON_EYE = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+    <circle cx="12" cy="12" r="2.6" />
+  </svg>
+);
+
+const ICON_PENCIL = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
+    <path d="m14 8 3 3" />
+  </svg>
+);
+
+const ICON_REFRESH = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+    <path d="M20 5v6h-6" />
+  </svg>
+);
+
+function RowActions({
+  item,
+  canEdit,
+  onOpen,
+}: {
+  item: ActivationListItem;
+  canEdit: boolean;
+  onOpen: (item: ActivationListItem) => void;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="activation-row-actions">
+      <button
+        type="button"
+        className="activation-icon-btn"
+        data-tooltip="Deschide"
+        title="Deschide activarea"
+        aria-label={`Deschide activarea ${item.title}`}
+        onClick={() => onOpen(item)}
+      >
+        {ICON_EYE}
+      </button>
+
+      {canEdit ? (
+        <button
+          type="button"
+          className="activation-icon-btn"
+          data-tooltip="Editează"
+          title="Editează activarea"
+          aria-label={`Editează activarea ${item.title}`}
+          onClick={() => navigate(`/activations/${item.id}/edit`, { state: { from: '/activations' } })}
+        >
+          {ICON_PENCIL}
+        </button>
+      ) : null}
+
+      {/*
+        "Refresh social results", the prototype's third icon and its `.results`
+        filled treatment.
+
+        The prototype's handler calls `simulateResults()` — it invents metrics.
+        That cannot be ported: this application's results come from an
+        OMD_ACTIVATION_MONITORING_PACKAGE import, and writing made-up numbers
+        into a real database would be fabricating measurements.
+
+        So the button goes where the real results are: the monitoring screen,
+        filtered to this activation. Same icon, same place, and an action that
+        tells the truth about where the numbers come from.
+      */}
+      <button
+        type="button"
+        className="activation-icon-btn results"
+        data-tooltip="Rezultate social"
+        title="Vezi rezultatele pe postări și canale social"
+        aria-label={`Vezi rezultatele social pentru ${item.title}`}
+        onClick={() => navigate(`/monitoring-activations?activation=${encodeURIComponent(item.id)}`)}
+      >
+        {ICON_REFRESH}
+      </button>
+    </div>
+  );
+}
+
+function ActivationRow({
+  item,
+  canEdit,
+  onOpen,
+  onOpenCampaign,
+}: {
+  item: ActivationListItem;
+  canEdit: boolean;
+  onOpen: (item: ActivationListItem) => void;
+  onOpenCampaign: (campaignKey: string) => void;
+}) {
   const situation = getTemporalSituation(item);
 
   return (
     <tr>
       <td>
-        <Link className="activation-title-link" to={`/activations/${item.id}`}>
+        {/* A button, as in the prototype — the title opens the fiche in the
+            drawer rather than navigating away, so the filters, the scroll
+            position and the view you were in survive. `/activations/:key` still
+            works as a URL for anyone who lands on it directly. */}
+        <button type="button" className="activation-title-link" onClick={() => onOpen(item)}>
           {item.title}
-        </Link>
+        </button>
       </td>
 
       <td>
         <div className="activation-campaign-cell">
           {item.campaignId ? (
             <>
-              <Link className="table-link" to={`/campaigns/${item.campaignId}`}>
+              <button
+                type="button"
+                className="table-link"
+                onClick={() => onOpenCampaign(item.campaignId as string)}
+              >
                 {item.campaignTitle}
-              </Link>
+              </button>
               <div className="activation-campaign-meta">
                 <span>{item.campaignPillar}</span>
                 <span>{item.campaignType}</span>
@@ -126,6 +242,10 @@ function ActivationRow({ item }: { item: ActivationListItem }) {
           <span className="annual-mini">—</span>
         )}
       </td>
+
+      <td>
+        <RowActions item={item} canEdit={canEdit} onOpen={onOpen} />
+      </td>
     </tr>
   );
 }
@@ -136,11 +256,26 @@ export function ActivationsPage() {
   const [filters, setFilters] = useState<ActivationFilters>(EMPTY_ACTIVATION_FILTERS);
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [year, setYear] = useState(new Date().getFullYear());
-  const { items, meta, loading, error } = useActivations(filters);
+  const { items, meta, loading, error, reload } = useActivations(filters);
   const stats = useActivationStats();
   const catalogs = useCatalogs();
   // Campaign list feeds the campaign filter; codes come from the database.
   const { items: campaigns } = useCampaigns(EMPTY_FILTERS);
+  /*
+   * Which activation the drawer is showing, or null when it is closed.
+   *
+   * A key rather than the row object: the drawer fetches the full fiche anyway,
+   * and holding the list row would leave the drawer showing a stale copy after
+   * the list reloads.
+   */
+  const [openKey, setOpenKey] = useState<string | null>(null);
+
+  /*
+   * The campaign drawer stacks over the activation one, as in the prototype:
+   * `OMD.campaigns.open()` there does not dismiss the activation view. You
+   * glance at the campaign and come back to where you were.
+   */
+  const [openCampaignKey, setOpenCampaignKey] = useState<string | null>(null);
 
   const years = useMemo(() => {
     const set = new Set<number>([2026, 2027, 2028]);
@@ -158,7 +293,11 @@ export function ActivationsPage() {
 
   return (
     <>
-      <header className="page-head">
+      {/* `wide-lede`: this subtitle needs 688px and the shared measure stops at
+          660, so it broke onto a second line for the sake of 28 pixels. Scoped
+          to this page rather than raised for every page — the 660px measure is
+          a readability constraint elsewhere, not an accident. */}
+      <header className="page-head wide-lede">
         <div>
           <h1>Activări</h1>
           <p>
@@ -325,7 +464,6 @@ export function ActivationsPage() {
           {error}
         </div>
       ) : null}
-
       {!loading && !error && items.length === 0 ? (
         <section className="activation-empty">
           <div>▶</div>
@@ -335,7 +473,13 @@ export function ActivationsPage() {
       ) : null}
 
       {!loading && !error && items.length > 0 && view === 'calendar' ? (
-        <ActivationCalendar items={items} year={year} years={years} onYearChange={setYear} />
+        <ActivationCalendar
+          items={items}
+          year={year}
+          years={years}
+          onYearChange={setYear}
+          onOpen={(item) => setOpenKey(item.id)}
+        />
       ) : null}
 
       {!loading && !error && items.length > 0 && view === 'list' ? (
@@ -362,16 +506,41 @@ export function ActivationsPage() {
                   <th>Materiale</th>
                   <th>Rezultate</th>
                   <th>Plan anual</th>
+                  {/* Actions. Headerless in the prototype too — the icons
+                      carry their own labels. */}
+                  <th aria-label="Acțiuni" />
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <ActivationRow key={item.id} item={item} />
+                  <ActivationRow
+                    key={item.id}
+                    item={item}
+                    canEdit={canEdit}
+                    onOpen={(row) => setOpenKey(row.id)}
+                    onOpenCampaign={setOpenCampaignKey}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
         </section>
+      ) : null}
+
+      {openKey ? (
+        <ActivationDrawer
+          externalKey={openKey}
+          onClose={() => setOpenKey(null)}
+          onOpenCampaign={setOpenCampaignKey}
+          escapeEnabled={openCampaignKey === null}
+        />
+      ) : null}
+
+      {openCampaignKey ? (
+        <CampaignDrawer
+          externalKey={openCampaignKey}
+          onClose={() => setOpenCampaignKey(null)}
+        />
       ) : null}
     </>
   );

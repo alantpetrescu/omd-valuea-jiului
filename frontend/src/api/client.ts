@@ -22,6 +22,10 @@ export type ApiErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'STALE_VERSION'
+  // A delete refused because the row has history the system keeps. The server
+  // sends the reason and the allowed alternative; it was missing here, so the
+  // one code the UI has to explain rather than just report was untyped.
+  | 'ENTITY_IN_USE'
   | 'VALIDATION_ERROR'
   | 'INTERNAL_ERROR'
   | 'NETWORK_ERROR';

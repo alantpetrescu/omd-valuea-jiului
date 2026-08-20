@@ -333,7 +333,21 @@ export function CampaignBlocks({
   const [preview, setPreview] = useState<{ src: string; caption: string } | null>(null);
 
   const months = (campaign.seasonalityMonths ?? []).map((month) => MONTHS[month - 1]).join(', ');
-  const hasFramework = campaign.frameworkDeliverables?.length > 0;
+  /*
+   * An umbrella campaign describes framework deliverables instead of shipping
+   * visual templates, and this switches the whole of section 5 between the two.
+   *
+   * It counts entries with something in them, not entries. Counting rows made a
+   * single blank one — which the editor used to leave behind on every save —
+   * enough to reclassify a thematic campaign as an umbrella one, at which point
+   * its mockups and their images stopped being rendered. The editor no longer
+   * writes blank rows, but campaigns saved before that still carry them, and a
+   * question about whether content exists should be answered by looking at the
+   * content.
+   */
+  const hasFramework = (campaign.frameworkDeliverables ?? []).some(
+    (item) => item.name?.trim() || item.content?.trim() || item.format?.trim(),
+  );
 
   return (
     <>
