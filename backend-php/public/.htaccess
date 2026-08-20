@@ -1,0 +1,32 @@
+# Everything reaching this directory is handled by index.php.
+#
+# The rewrite deliberately does NOT strip the /api/v1 prefix: the route table
+# declares full paths, matching the Express routers, so the two backends stay
+# comparable.
+
+RewriteEngine On
+
+# A real file or directory is served as-is. Nothing else exists in here besides
+# index.php, so this is only a safety net.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^ index.php [QSA,L]
+
+# The Authorization header is dropped by some CGI/FastCGI setups before PHP
+# sees it. The app authenticates by cookie, so this only matters if a client
+# ever sends a bearer token.
+<IfModule mod_rewrite.c>
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always unset X-Powered-By
+</IfModule>
+
+# Directory listings would expose the layout even though there is nothing to
+# read here.
+Options -Indexes

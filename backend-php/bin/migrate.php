@@ -1,0 +1,248 @@
+<?php
+
+/**
+ * Migration runner — port of `database/migrate.ts`.
+ *
+ *   php bin/migrate.php            apply every pending migration
+ *   php bin/migrate.php --status   list applied and pending, change nothing
+ *
+ * Rules this enforces:
+ *   - migrations are the only way the schema changes;
+ *   - the same files run in staging and production;
+ *   - an already-applied file whose contents changed on disk is an error, not a
+ *     silent no-op, because the two environments would then diverge invisibly.
+ *
+ * It reads the SAME `database/migrations/*.sql` as the Node runner and records
+ * into the SAME `schema_migrations` table, with the same SHA-256 checksums. A
+ * database migrated by one is recognised as up to date by the other.
+ *
+ * MySQL does not roll back DDL. A failing statement stops the run immediately
+ * and leaves earlier statements applied — the failure names the exact file and
+ * statement so it can be resolved by hand.
+ */
+
+declare(strict_types=1);
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use Omd\Config\Env;
+use Omd\Database\Db;
+
+/**
+ * CLI, or included by the guarded public/setup.php.
+ *
+ * The hosting this port targets has no Terminal, so refusing every non-CLI
+ * caller would make the database impossible to create. setup.php defines
+ * OMD_SETUP only after checking the token, so this stays closed to the web at
+ * large.
+ */
+if (PHP_SAPI !== 'cli' && !defined('OMD_SETUP')) {
+    http_response_code(403);
+    echo 'This script runs from the command line, or through setup.php.';
+    exit(1);
+}
+
+/** STDERR does not exist under the web SAPI; echo reaches setup.php's output. */
+if (!function_exists('omd_write_error')) {
+    function omd_write_error(string $message): void
+    {
+        if (PHP_SAPI === 'cli' && defined('STDERR')) {
+            fwrite(STDERR, $message);
+            return;
+        }
+        echo $message;
+    }
+}
+
+const CREATE_TRACKING_TABLE = <<<'SQL'
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      filename        VARCHAR(255) NOT NULL,
+      checksum_sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+      applied_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+      PRIMARY KEY (filename)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+    SQL;
+
+/**
+ * Splits a migration file into statements on semicolons at paren depth zero,
+ * ignoring line comments and string literals.
+ *
+ * Byte-for-byte the same algorithm as the Node runner, because the two must
+ * agree on what a statement is or a file could apply differently.
+ *
+ * @return list<string>
+ */
+function splitStatements(string $sql): array
+{
+    $statements = [];
+    $current = '';
+    $depth = 0;
+    $inSingle = false;
+    $inDouble = false;
+    $inBacktick = false;
+    $inLineComment = false;
+
+    $length = strlen($sql);
+    for ($i = 0; $i < $length; $i++) {
+        $char = $sql[$i];
+        $next = $i + 1 < $length ? $sql[$i + 1] : '';
+
+        if ($inLineComment) {
+            if ($char === "\n") {
+                $inLineComment = false;
+            }
+            $current .= $char;
+            continue;
+        }
+        if (!$inSingle && !$inDouble && !$inBacktick && $char === '-' && $next === '-') {
+            $inLineComment = true;
+            $current .= $char;
+            continue;
+        }
+
+        if ($char === "'" && !$inDouble && !$inBacktick) {
+            $inSingle = !$inSingle;
+        } elseif ($char === '"' && !$inSingle && !$inBacktick) {
+            $inDouble = !$inDouble;
+        } elseif ($char === '`' && !$inSingle && !$inDouble) {
+            $inBacktick = !$inBacktick;
+        }
+
+        if (!$inSingle && !$inDouble && !$inBacktick) {
+            if ($char === '(') {
+                $depth++;
+            } elseif ($char === ')') {
+                $depth--;
+            } elseif ($char === ';' && $depth === 0) {
+                $trimmed = trim($current);
+                if ($trimmed !== '') {
+                    $statements[] = $trimmed;
+                }
+                $current = '';
+                continue;
+            }
+        }
+
+        $current .= $char;
+    }
+
+    $tail = trim($current);
+    if ($tail !== '') {
+        $statements[] = $tail;
+    }
+
+    return $statements;
+}
+
+/** @return list<array{filename:string,contents:string,checksum:string}> */
+function readMigrationFiles(string $directory): array
+{
+    if (!is_dir($directory)) {
+        throw new RuntimeException(
+            "Directorul de migrații nu există: {$directory}\n"
+            . 'database/ trebuie să fie lângă backend-php/, nu în el.'
+        );
+    }
+
+    $names = array_values(array_filter(
+        scandir($directory) ?: [],
+        static fn (string $name): bool => str_ends_with($name, '.sql'),
+    ));
+    sort($names);
+
+    $files = [];
+    foreach ($names as $name) {
+        $contents = file_get_contents($directory . '/' . $name);
+        if ($contents === false) {
+            throw new RuntimeException("Migrația nu poate fi citită: {$name}");
+        }
+        $files[] = [
+            'filename' => $name,
+            'contents' => $contents,
+            'checksum' => hash('sha256', $contents),
+        ];
+    }
+
+    return $files;
+}
+
+function run(bool $statusOnly): void
+{
+    Db::pdo()->exec(CREATE_TRACKING_TABLE);
+
+    $applied = Db::rows('SELECT filename, checksum_sha256, applied_at FROM schema_migrations ORDER BY filename');
+    $appliedByName = [];
+    foreach ($applied as $row) {
+        $appliedByName[(string) $row['filename']] = $row;
+    }
+
+    $files = readMigrationFiles(Env::migrationsDir());
+
+    foreach ($files as $file) {
+        $previous = $appliedByName[$file['filename']] ?? null;
+        if ($previous !== null && (string) $previous['checksum_sha256'] !== $file['checksum']) {
+            throw new RuntimeException(
+                "{$file['filename']} was already applied but its contents changed. "
+                . 'Never edit an applied migration — add a new one instead.'
+            );
+        }
+    }
+
+    $pending = array_values(array_filter(
+        $files,
+        static fn (array $file): bool => !isset($appliedByName[$file['filename']]),
+    ));
+
+    if ($statusOnly) {
+        foreach ($files as $file) {
+            $previous = $appliedByName[$file['filename']] ?? null;
+            $state = $previous !== null ? 'applied ' . $previous['applied_at'] : 'PENDING';
+            printf("  %-28s %s\n", $file['filename'], $state);
+        }
+        printf("\n%d applied, %d pending\n", count($applied), count($pending));
+        return;
+    }
+
+    if ($pending === []) {
+        printf("no pending migrations (%s)\n", Env::string('DB_NAME'));
+        return;
+    }
+
+    foreach ($pending as $file) {
+        $statements = splitStatements($file['contents']);
+        printf("applying %s (%d statements)\n", $file['filename'], count($statements));
+
+        foreach ($statements as $index => $statement) {
+            try {
+                Db::pdo()->exec($statement);
+            } catch (PDOException $error) {
+                $firstLine = strtok($statement, "\n");
+                throw new RuntimeException(sprintf(
+                    "%s: statement %d of %d failed.\n%s\n%s\n\n"
+                    . "DDL is not transactional: statements before this one are applied.",
+                    $file['filename'],
+                    $index + 1,
+                    count($statements),
+                    $firstLine === false ? '' : $firstLine,
+                    $error->getMessage(),
+                ));
+            }
+        }
+
+        Db::execute(
+            'INSERT INTO schema_migrations (filename, checksum_sha256) VALUES (?, ?)',
+            [$file['filename'], $file['checksum']],
+        );
+        printf("  applied %s\n", $file['filename']);
+    }
+
+    printf("\n%d migrations applied to %s\n", count($pending), Env::string('DB_NAME'));
+}
+
+try {
+    run(in_array('--status', $argv ?? [], true));
+    exit(0);
+} catch (Throwable $error) {
+    omd_write_error("\nmigration run failed:\n" . $error->getMessage() . "\n");
+    exit(1);
+}

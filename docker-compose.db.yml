@@ -1,0 +1,73 @@
+# MySQL only.
+#
+# Just the database — no API, no nginx, no Tailscale. Use it when the
+# application runs somewhere else (your machine, a cPanel account, a PaaS) and
+# only the database needs a home.
+#
+# It is deliberately a separate file from docker-compose.yml, which describes
+# the full tailnet stack and expects an *external* database. Nothing here
+# touches that stack.
+#
+#   docker compose -f docker-compose.db.yml --env-file .env.db up -d
+#   docker compose -f docker-compose.db.yml logs -f mysql
+#   docker compose -f docker-compose.db.yml down          # keeps the data
+#   docker compose -f docker-compose.db.yml down -v       # deletes the data
+#
+# See deploy/DATABASE-CONTAINER.md for the whole procedure.
+
+services:
+  mysql:
+    # 8.4 is the current LTS and satisfies what the schema needs: the
+    # utf8mb4_0900_ai_ci collation, CHECK constraints and JSON functions all
+    # require 8.0 or newer. Pinned to a minor line so a rebuild cannot silently
+    # move the server under existing data.
+    image: mysql:8.4
+    container_name: omd-mysql
+    restart: unless-stopped
+
+    command:
+      # The schema declares utf8mb4_0900_ai_ci per table, but the server
+      # defaults decide what a connection gets before that — and what any
+      # CREATE TABLE without an explicit clause would get.
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # Every stored timestamp is UTC. The application connects with
+      # `time_zone = '+00:00'`, and this makes the server agree even for a
+      # session that does not set it — mysql, mysqldump, phpMyAdmin.
+      - --default-time-zone=+00:00
+      # Imports move base64-decoded visuals; the 4 MB default rejects them.
+      - --max-allowed-packet=64M
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env.db}
+      # Creating the database and the user here also grants that user ALL
+      # privileges on that one schema — which is what the migration runner
+      # needs, since it issues 40 CREATE TABLE and one CREATE VIEW.
+      MYSQL_DATABASE: ${DB_NAME:-omd_vj_production}
+      MYSQL_USER: ${DB_USER:-omd_app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.db}
+
+    ports:
+      # Bound to loopback by default: a database is not a public service, and
+      # `3306:3306` would publish it through the host firewall on most setups.
+      # To reach it from another machine, put a tunnel in front rather than
+      # widening this.
+      - "${DB_BIND:-127.0.0.1}:${DB_PORT:-3306}:3306"
+
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # Anything dropped in here runs once, on first start of an empty volume.
+      # Useful for restoring a dump; ignored entirely afterwards.
+      - ./deploy/mysql-init:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      # Authenticates rather than just opening a socket, so "healthy" means the
+      # server is actually ready to serve the app, not merely listening.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+volumes:
+  mysql-data:

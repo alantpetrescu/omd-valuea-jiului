@@ -48,9 +48,21 @@ upsert simply overwrites. Silent data loss.
 
 - all 78 rows are preserved, attached to the correct activation;
 - the existing UNIQUE constraint is respected — no schema change;
-- the contract id is recovered by splitting on `::` (`contractKpiId()` in
-  `backend/src/activations/activation-import.ts`), so export can reproduce the
-  original payload byte-for-byte.
+- the scoping is reversible: splitting on `::` recovers the contract id, so an
+  exporter can reproduce the original payload.
+
+The reverse helper is `contractKpiId()`, in
+`backend/src/activations/activation-import.ts` and in
+`backend-php/src/Activations/ActivationImport.php`. **It has no caller in either
+backend**, because there is no activation exporter yet — the only export path is
+`campaign-export.ts`. The round trip is therefore possible by construction but
+not yet exercised, and this line previously claimed it was. Whoever writes the
+activation exporter must call it; without that, exported KPI ids would carry the
+`<activationExternalKey>::` prefix and no longer match the contract.
+
+Both backends implement the scoping identically. Verified by importing the four
+DEMO_SEED packages into two empty databases, one through each backend: 78 KPI
+rows on both sides, and no content difference anywhere in the 41 tables.
 
 Nothing else in the schema, the contracts or the API is affected. Material,
 campaign, template and asset external keys were checked and are globally unique
