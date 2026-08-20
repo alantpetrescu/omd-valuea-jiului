@@ -41,8 +41,8 @@ apoi:
 
 ```bash
 cd backend
-npm run migrate
-npm run seed:technical
+pnpm run migrate
+pnpm run seed:technical
 ```
 
 În producție, unde `tsx` nu există:

@@ -60,7 +60,7 @@ them blocks a later step.
 | An SSH account **in the `sudo` group** | Unavoidable: steps 1, 2, 6 install packages, create a MySQL user, and write to `/etc/nginx` and `/etc/systemd` — all root-owned. You do *not* need the root account itself or `NOPASSWD` sudo; the commands that run over SSH use `ssh -t` so sudo can prompt you. |
 | A hostname with an A record (and AAAA if the host has IPv6) pointing at the server's public IP | certbot proves control of the name over HTTP. Without DNS already resolving, step 6's certificate request fails. Set it up and let it propagate *before* you begin. |
 | Inbound TCP 80 and 443 open to the internet | Both, not just 443: certbot's HTTP-01 challenge arrives on 80, and 80 also serves the redirect. Check the host firewall (`ufw`/`firewalld`) **and** any cloud security group — they are separate and both must allow it. |
-| Outbound HTTPS from the server | `apt`, the NodeSource script, `npm ci` and certbot all fetch from the internet. On a locked-down network, arrange a mirror or build `node_modules` elsewhere and rsync it. |
+| Outbound HTTPS from the server | `apt`, the NodeSource script, `pnpm install` and certbot all fetch from the internet. On a locked-down network, arrange a mirror or build `node_modules` elsewhere and rsync it. |
 | Node 20 or newer | `backend/package.json` sets `engines: { node: ">=20" }`. Step 1 installs 24. |
 | MySQL 8.0 or newer | The schema uses `utf8mb4_0900_ai_ci`, which does not exist before 8.0. |
 | A free TCP port on loopback | 3000 by default. If it is taken, change `PORT` in `.env` **and** `proxy_pass` in the nginx site — they must agree. |
@@ -106,8 +106,13 @@ sudo apt update
 sudo apt install -y nginx mysql-server certbot python3-certbot-nginx rsync
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
+sudo corepack enable pnpm
 sudo adduser --system --group --home /srv/omd omd
 ```
+
+`corepack` ships with Node, so this puts `pnpm` on PATH without a second global
+install. The project is built and installed with pnpm: `pnpm-lock.yaml` is where
+the versions are pinned, and `npm ci` here would resolve from a different file.
 
 ## 2. Database
 
@@ -139,8 +144,8 @@ sudo mysql -e "
 Both builds are verified working.
 
 ```bash
-cd backend  && npm ci && npm run build     # -> backend/dist
-cd ../frontend && npm ci && npm run build  # -> frontend/dist
+cd backend  && pnpm install --frozen-lockfile && pnpm run build     # -> backend/dist
+cd ../frontend && pnpm install --frozen-lockfile && pnpm run build  # -> frontend/dist
 ```
 
 Ship over your own SSH account. `omd` has a `nologin` shell by design, so it
@@ -171,7 +176,7 @@ Then install production dependencies on the server, so `argon2`'s native binding
 is compiled for that machine:
 
 ```bash
-ssh -t you@server 'cd /srv/omd/backend && sudo -u omd npm ci --omit=dev'
+ssh -t you@server 'cd /srv/omd/backend && sudo -u omd pnpm install --prod --frozen-lockfile'
 ```
 
 ## 4. Configuration
@@ -210,7 +215,7 @@ middleware because nginx serves the SPA and the API on one origin.
 
 ## 5. Schema and first user
 
-`tsx` is a devDependency, so after `npm ci --omit=dev` the `npm run migrate`
+`tsx` is a devDependency, so after `pnpm install --prod` the `pnpm run migrate`
 script does not exist. Run the compiled files:
 
 ```bash
@@ -326,7 +331,7 @@ ssh -t you@server 'sudo rsync -a --delete /tmp/omd-dist/ /srv/omd/backend/dist/ 
   && sudo chown -R omd:omd /srv/omd/backend/dist /srv/omd/web \
   && rm -rf /tmp/omd-dist /tmp/omd-web \
   && cd /srv/omd/backend \
-  && sudo -u omd npm ci --omit=dev \
+  && sudo -u omd pnpm install --prod --frozen-lockfile \
   && sudo -u omd node dist/database/migrate.js \
   && sudo systemctl restart omd-api'
 ```
@@ -342,7 +347,7 @@ served with `no-store`, so browsers pick up the new bundle immediately.
 
 ## Known gaps, before you rely on this
 
-- **No automated tests at any level.** Nothing gates a deploy; `npm run typecheck`
+- **No automated tests at any level.** Nothing gates a deploy; `pnpm run typecheck`
   is the only static check.
 - **No import UI.** Importing production data needs shell access and
   `node dist/imports/cli.js <file>`.

@@ -15,10 +15,10 @@ proba și ce rămâne pe seama configurației Apache de pe server.
 
 | | |
 |---|---|
-| Acces cPanel | File Manager, MultiPHP Manager, MySQL Databases |
+| Acces cPanel | File Manager, MultiPHP Manager, MultiPHP INI Editor, MySQL Databases, phpMyAdmin |
 | Terminal | **nu e necesar** — instalarea se face dintr-un URL protejat |
 | Node.js pe gazdă | **nu e necesar** — frontendul se construiește pe calculatorul tău |
-| Pe calculatorul tău | Node 20+ și proiectul, ca să poți rula `npm run build` |
+| Pe calculatorul tău | Node 20+, pnpm și proiectul, ca să poți construi frontendul |
 | Pachetele JSON | cele 4 fișiere din `04_DEMO_SEEDS/` |
 
 Domeniul are deja `Force HTTPS Redirect` activat. E o **precondiție**, nu o
@@ -38,19 +38,48 @@ sau mai nou → Apply.
 Dacă gazda oferă 8.2 sau 8.3, alege-o: 8.1 nu mai primește actualizări de
 securitate. Aplicația merge pe oricare dintre ele.
 
-**cPanel → Select PHP Version → Extensions** — trebuie bifate exact astea patru:
+### Extensiile — nu ai ce bifa, și e în regulă
+
+Backendul are nevoie de patru extensii:
 
 ```
 pdo_mysql    mbstring    json    filter
 ```
 
-Asta e lista completă; sunt exact extensiile pe care le verifică `?action=check`
-la pasul 6, iar fără vreuna dintre ele backendul refuză să pornească și spune
-care lipsește. `json` și `filter` sunt de obicei active implicit.
+Pe acest cont **nu le poți schimba**. Secțiunea Software are doar `MultiPHP
+Manager`, `MultiPHP INI Editor` și `Pachete PHP PEAR`; lipsește „Select PHP
+Version", care e componenta CloudLinux ce dă bifele pentru extensii. Ce e
+compilat în PHP decide gazda.
 
-Nu ai nevoie de `openssl` sau `fileinfo`: criptografia folosită (`random_bytes`,
-`hash_hmac`, `password_hash`) e în nucleul PHP, iar tipul fișierelor vine din
-`data:` URI-ul pachetului, nu din detecție.
+Asta nu e o problemă în sine: toate patru sunt active implicit pe practic orice
+cPanel. `?action=check`, la pasul 6, spune exact ce lipsește. **Dacă raportează
+vreuna lipsă, singura soluție e un tichet la gazdă** — cere să activeze
+extensia pentru versiunea de PHP a domeniului.
+
+`Pachete PHP PEAR` nu are legătură cu asta. PEAR distribuie biblioteci PHP ca
+fișiere; extensiile sunt module compilate în interpretor. Din pagina aceea nu-ți
+trebuie nimic — backendul e scris fără Composer, fără `vendor/` și fără PEAR,
+tocmai ca să nu depindă de ce poate instala gazda.
+
+Nu ai nevoie nici de `openssl` sau `fileinfo`: criptografia folosită
+(`random_bytes`, `hash_hmac`, `password_hash`) e în nucleul PHP, iar tipul
+fișierelor vine din `data:` URI-ul pachetului, nu din detecție.
+
+### MultiPHP INI Editor — util la pasul 6
+
+Nu e obligatoriu acum, dar reține unde e. Importul e cel mai greu pas al
+instalării, iar dacă expiră, acolo ridici limitele. **MultiPHP INI Editor →
+selectează domeniul → Editor de bază:**
+
+| setare | valoare de lucru |
+|---|---|
+| `max_execution_time` | `300` |
+| `memory_limit` | `256M` |
+| `post_max_size` | lasă cum e |
+
+Instalatorul cere el `set_time_limit(0)`, dar unele gazde ignoră asta și taie
+cererea din configurația FastCGI. Dacă nici așa nu trece, pasul 6 explică cum
+imporți pachetele unul câte unul.
 
 ---
 
@@ -78,9 +107,13 @@ Pe calculatorul tău, în PowerShell:
 ```powershell
 cd D:\Florian\omd-valea-jiului\frontend
 $env:APP_BASE_PATH = '/app/'
-npm ci
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 ```
+
+`--frozen-lockfile` e echivalentul lui `npm ci`: instalează exact ce scrie în
+`pnpm-lock.yaml` și eșuează dacă `package.json` s-a schimbat fără lockfile. Pe
+gazdă nu se instalează nimic — tot ce urci e rezultatul din `dist/`.
 
 `APP_BASE_PATH` e ce face aplicația să funcționeze într-un subdirector: Vite
 rescrie fiecare URL de resursă cu el, iar routerul îl citește înapoi din
@@ -184,15 +217,27 @@ iar `/home/visit/public_html/app/index.html` există.
 
 ### Fișierele de legătură
 
-Din `deploy/cpanel/` urcă și redenumește:
+Cinci fișiere, și **fiecare se redenumește la urcare**. Numele din repo au
+prefixe ca să nu se amestece între ele; numele de pe gazdă sunt cele care
+contează, pentru că Apache le caută exact așa.
 
-| din repo | pe gazdă |
-|---|---|
-| `deploy/cpanel/api-index.php` | `/home/visit/public_html/api/index.php` |
-| `deploy/cpanel/api-setup.php` | `/home/visit/public_html/api/setup.php` |
-| `backend-php/public/.htaccess` | `/home/visit/public_html/api/.htaccess` |
-| `deploy/cpanel/app.htaccess` | `/home/visit/public_html/app/.htaccess` |
-| `deploy/cpanel/uploads.htaccess` | `/home/visit/public_html/uploads/.htaccess` |
+| din repo | pe gazdă | nume nou |
+|---|---|---|
+| `deploy/cpanel/api-index.php` | `public_html/api/` | **`index.php`** |
+| `deploy/cpanel/api-setup.php` | `public_html/api/` | **`setup.php`** |
+| `backend-php/public/.htaccess` | `public_html/api/` | `.htaccess` |
+| `deploy/cpanel/app.htaccess` | `public_html/app/` | **`.htaccess`** |
+| `deploy/cpanel/uploads.htaccess` | `public_html/uploads/` | **`.htaccess`** |
+
+> **File Manager ascunde implicit fișierele care încep cu punct.** Înainte de
+> orice, deschide **Setări** (dreapta sus) și bifează **Afișare fișiere
+> ascunse (dotfiles)**. Altfel nu vezi niciunul dintre cele trei `.htaccess`
+> după ce le urci și nu poți verifica nimic.
+
+După urcare, `/home/visit/public_html/api/` trebuie să conțină **exact trei
+fișiere**: `index.php`, `setup.php`, `.htaccess`. Dacă `setup.php` lipsește sau
+a rămas `api-setup.php`, pasul 6 răspunde cu `File not found.` — mesajul e de la
+PHP-FPM și înseamnă că fișierul nu există pe disc.
 
 Cele două fișiere `.php` conțin fiecare un singur `require` către codul din
 `/home/visit/omd/`. **Dacă numele contului nu e `visit`, deschide-le și schimbă
@@ -357,7 +402,7 @@ totul e legat:
 ```powershell
 cd D:\Florian\omd-valea-jiului\frontend
 $env:APP_BASE_PATH = '/app/'
-npm run build
+pnpm run build
 $zip = 'D:\Florian\omd-valea-jiului\omd-frontend.zip'
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
 Push-Location dist; tar.exe -a -c -f $zip *; Pop-Location
@@ -400,7 +445,7 @@ afara docroot-ului, shim-urile în `public_html/api/`, frontendul construit cu
 **Şapte lucruri s-au rupt la validarea listei.** Le enumăr pentru că niciunul nu
 s-ar fi văzut dintr-o recitire — au ieșit doar rulând fiecare pas:
 
-1. **`npm run build` eșua.** Verificasem cu `npx vite build`, care sare peste
+1. **`pnpm run build` eșua.** Verificasem cu `vite build` direct, care sare peste
    TypeScript; scriptul real rulează `tsc -b` întâi, iar `import.meta.env` nu era
    tipizat. Adăugat `frontend/src/vite-env.d.ts`.
 2. **`TRUST_PROXY` nu funcționa deloc.** Era citit cu `getenv()`, care nu vede
@@ -450,11 +495,15 @@ manual, o dată.
 |---|---|
 | Pagină albă la `/app` | build fără `APP_BASE_PATH` — verifică `dist/index.html` |
 | 404 la F5 pe `/app/orice` | lipsește `public_html/app/.htaccess` |
+| `File not found.` (text simplu) | fișierul `.php` nu există pe disc — cel mai probabil a rămas `api-setup.php` în loc de `setup.php` |
 | 404 la `/api/v1/health` | lipsește `public_html/api/.htaccess` sau calea din `api/index.php` e greșită |
+| Nu vezi `.htaccess` în File Manager | e ascuns; Setări → Afișare fișiere ascunse |
 | 500 la `/api/...` | `.env` lipsă sau incomplet; vezi `logs/` din contul cPanel |
 | „Token invalid" la setup | `APP_SECRET` din URL nu e identic cu cel din `.env` |
 | „Refuzat pe HTTP" | ai deschis `http://` — foloseşte `https://` |
 | `migrate` se oprește la primul tabel | `visit_omd_app` nu are ALL PRIVILEGES |
+| `check` spune că lipsește o extensie | nu o poți activa singur — tichet la gazdă (vezi pasul 1) |
+| `import` se oprește fără mesaj | expirat; ridică limitele din MultiPHP INI Editor sau importă pachetele pe rând |
 | Imagini rupte | `UPLOAD_DIR` nu arată spre `public_html/uploads`, sau lipsesc permisiunile |
 | Deconectat la fiecare cerere | `AUTH_SECRET` s-a schimbat, sau `APP_ENV=production` fără HTTPS |
 | „Prea multe încercări" la login | limitatorul de rată; 15 minute, sau șterge `omd/storage/rate-limit/` |

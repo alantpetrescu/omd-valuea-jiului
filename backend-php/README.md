@@ -136,7 +136,7 @@ Node:
 ```powershell
 cd frontend
 $env:API_TARGET = 'http://127.0.0.1:8080'
-npm run dev
+pnpm run dev
 ```
 
 Apoi http://localhost:5173. Variabila e citită în `vite.config.ts`; fără ea
@@ -391,7 +391,8 @@ Adică o instalare nouă nu mai are nevoie de backendul Node pentru nimic.
 ### Importul, verificat pe o bază goală
 
 Cele patru pachete DEMO_SEED au fost importate **de două ori, în două baze
-golite complet**: o dată prin `php bin/import.php`, o dată prin `npm run import`.
+golite complet**: o dată prin `php bin/import.php`, o dată prin CLI-ul Node
+(`tsx src/imports/cli.ts`).
 Apoi conținutul ambelor a fost comparat rând cu rând.
 
 | | |

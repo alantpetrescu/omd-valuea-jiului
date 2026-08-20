@@ -1,4 +1,11 @@
-# Deploying on cPanel
+# Deploying on cPanel — the Node backend
+
+> **For visitvaleajiului.ro, use `DEPLOY-CPANEL.md` instead.** That account has
+> no **Setup Node.js App**, which everything below depends on, so this route is
+> not available there. `DEPLOY-CPANEL.md` deploys the PHP backend, which needs no
+> Node process on the host at all.
+>
+> Keep this document for a host that *does* offer Node.
 
 An alternative to `DEPLOY.md`, for shared hosting where you have cPanel instead
 of root on a server. The pieces are the same — MySQL, a Node process, static
@@ -45,11 +52,11 @@ will not do.
 ## 2. Build locally and upload
 
 Build on your own machine — shared hosting rarely has the toolchain, and
-`npm ci` in a Node app container often runs out of memory:
+`pnpm install` in a Node app container often runs out of memory:
 
 ```bash
-cd backend  && npm ci && npm run build
-cd ../frontend && npm ci && npm run build
+cd backend  && pnpm install --frozen-lockfile && pnpm run build
+cd ../frontend && pnpm install --frozen-lockfile && pnpm run build
 ```
 
 Upload this tree **outside** `public_html`, so nothing in it is web-readable:
@@ -136,7 +143,7 @@ If you need random values and have no terminal:
 
 ## 5. Schema and first user
 
-`tsx` is a devDependency, so `npm run migrate` does not exist in production. Run
+`tsx` is a devDependency, so `pnpm run migrate` does not exist in production. Run
 the compiled files.
 
 **With Terminal** (cPanel → Terminal). Copy the `source …/bin/activate` line that
@@ -248,7 +255,7 @@ side.
 
 ## Updating
 
-1. `npm run build` in both projects locally.
+1. `pnpm run build` in both projects locally.
 2. Upload `backend/dist` over the old one, and `frontend/dist` into `public_html`.
 3. Run the migration script if the release added one.
 4. Setup Node.js App → **Restart**.
