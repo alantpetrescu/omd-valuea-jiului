@@ -505,3 +505,346 @@
 .page-head.wide-lede p {
   max-width: 760px;
 }
+
+
+/* A row action that is running, as opposed to one that cannot run.
+
+   The generic `:disabled` rule above greys the button out and drops its filled
+   `.results` treatment — right for "this will never work", wrong for "this is
+   working right now". These rules come after it and at equal or higher
+   specificity, so a busy button keeps its own colours and just turns.
+
+   Only the glyph rotates; the 36px button keeps its size and place, so the
+   table cannot shift under the pointer mid-click. */
+.activation-icon-btn.busy {
+  opacity: 1;
+  cursor: progress;
+}
+
+.activation-icon-btn.results.busy,
+.activation-icon-btn.results.busy:hover {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  transform: none;
+}
+
+.activation-icon-btn.busy svg {
+  animation: activation-results-spin 0.9s linear infinite;
+}
+
+@keyframes activation-results-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Motion is the only signal here, so it needs a still equivalent rather than
+   simply being switched off. */
+@media (prefers-reduced-motion: reduce) {
+  .activation-icon-btn.busy svg {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+
+/* Keeping the Date & import/export tab inside the viewport.
+
+   `main.about-content` is a grid, so every section in it takes `min-width:auto`
+   and refuses to shrink below its own content. The import table's six columns
+   therefore set the width of the single track, every sibling stretched to match,
+   and the page grew a horizontal scrollbar — measured at 29px past the viewport.
+
+   Two rules, because there are two separate reasons a box there will not shrink:
+   the grid items need a real zero minimum, and the table needs somewhere to
+   overflow that is not the page. `prototype.css` clips this box (`overflow:hidden`),
+   which with a shrinkable parent would cut the last column off with no way to
+   reach it, so the horizontal axis scrolls instead. */
+.about-content > * {
+  min-width: 0;
+}
+
+.data-portability-preview {
+  overflow-x: auto;
+}
+
+/* The package file name is one unbreakable token
+   (`OMD_ACTIVATION_MONITORING_PACKAGE_DEMO_SEED_v1.json`), so it sets its card's
+   minimum width all by itself. `anywhere` rather than `break-word`: only
+   `anywhere` is allowed to reduce the intrinsic min-content width, which is the
+   measurement that decides the track. */
+.data-portability-card h3 {
+  overflow-wrap: anywhere;
+}
+
+
+/* ===================================================================
+   Administrare → Strategie
+
+   Additive, as everything in this file is. `prototype.css` already ships the
+   pieces this screen is built from — `.activation-icon-btn`, `.detail-grid`,
+   `.wizard-body`, `.badge` — because the Admin screens deliberately reuse the
+   operational vocabulary rather than inventing a second one. What is here is
+   only what has no counterpart there: the row of four actions, the sortable
+   header, the inline fiche row, and the delete confirmation.
+   =================================================================== */
+
+.strategy-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.strategy-row-actions .activation-icon-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* The action glyphs are characters, not SVG, so they need to be centred as
+   text — `.activation-icon-btn` only positions its `svg` child. */
+.strategy-row-actions .activation-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sortable column headers.
+
+   A button rather than a click handler on the `<th>`: sorting is an action, it
+   needs to be reachable from the keyboard, and a screen reader has to be able to
+   announce it as something you can press. */
+.strategy-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.strategy-sort:hover {
+  color: var(--brand-dark);
+}
+
+.strategy-sort.active {
+  color: var(--brand-dark);
+}
+
+.strategy-sort:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* `＋ Adaugă`, under the list it extends. */
+.strategy-add-row {
+  display: flex;
+  justify-content: flex-start;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.strategy-form {
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--soft);
+}
+
+.strategy-form-head {
+  grid-column: 1 / -1;
+  font-size: var(--fs-h3);
+  color: var(--brand-dark);
+}
+
+/* A field that cannot be changed.
+
+   `disabled`, not `readonly`: a read-only input keeps a text cursor, accepts
+   focus and looks exactly like an editable one, so the only thing telling the
+   reader it is closed was the sentence under the label. Disabled says it in the
+   control itself, before anyone tries to type.
+
+   The cost is that a disabled input leaves the tab order, so the reason has to
+   be readable without focusing it — which is why it is rendered in the label,
+   always visible, rather than in a `title` or a validation message.
+
+   Scoped to the admin forms rather than raised to `.form-field` globally: a
+   disabled input elsewhere may mean something else entirely. */
+.strategy-form input:disabled,
+.wizard-body input:disabled {
+  background: var(--line-soft);
+  color: var(--faint);
+  cursor: not-allowed;
+  -webkit-text-fill-color: var(--faint); /* Safari greys disabled text its own way. */
+  opacity: 1; /* …and fades it; the muted ground is enough. */
+}
+
+.strategy-objective-picker {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.strategy-objective-picker label {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.strategy-objective-picker input {
+  margin-top: 3px;
+  accent-color: var(--brand);
+}
+
+.strategy-clone-preview {
+  display: block;
+  margin-top: 7px;
+  color: var(--faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* The inline fiche, in a row of its own under the record it describes.
+
+   Inline rather than a modal so two can be open at once — the point of the
+   fiche is comparison, and a modal answers one question at a time. */
+.strategy-view-row > td {
+  padding: 0;
+  background: var(--soft);
+}
+
+.strategy-reper-view {
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.strategy-reper-view-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 22px;
+}
+
+.strategy-reper-view-head strong {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--fs-h3);
+}
+
+.strategy-linked-objectives {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #3c443e;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* Delete confirmation.
+
+   Centred rather than a right-hand drawer: it is a question with two answers,
+   not a record to read, and it must interrupt. */
+.confirm-dialog {
+  position: fixed;
+  z-index: 60;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  display: grid;
+  gap: 16px;
+  padding: 24px 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: 0 24px 60px rgba(20, 32, 27, 0.24);
+}
+
+.confirm-dialog h3 {
+  font-size: var(--fs-h3);
+  text-wrap: pretty;
+}
+
+.confirm-dialog p {
+  color: #3c443e;
+  font-size: 13.5px;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.confirm-dependencies {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  background: var(--line-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.confirm-dependencies > div {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  padding: 11px 14px;
+  background: var(--surface);
+}
+
+.confirm-dependencies dt {
+  margin: 0;
+  font: 600 10.5px/1.4 var(--sans);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+  align-self: center;
+}
+
+.confirm-dependencies dd {
+  margin: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13.5px;
+}
+
+/* Which of the two lists is the one standing in the way. Without it the dialog
+   shows two counts and leaves the reader to work out which one matters. */
+.confirm-blocker {
+  padding: 2px 8px;
+  border: 1px solid #e4cdcd;
+  border-radius: 999px;
+  background: #f8eeee;
+  color: #7e4141;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .confirm-dependencies > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+

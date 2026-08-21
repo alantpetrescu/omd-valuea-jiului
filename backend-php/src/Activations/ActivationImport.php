@@ -472,27 +472,60 @@ final class ActivationImport
             $src = (string) ($material['visual']['src'] ?? '');
             if (str_starts_with($src, 'data:')) {
                 $file = Storage::stageDataUri($src);
-                $ownAssetId = Ids::newId();
-                Db::execute(
-                    'INSERT INTO assets
-                       (id, external_key, filename, original_filename, mime_type, file_size,
-                        storage_path, checksum_sha256, created_by)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [
-                        $ownAssetId,
-                        "asset-{$materialKey}",
-                        $file['filename'],
-                        $file['filename'],
-                        $file['mimeType'],
-                        $file['fileSize'],
-                        $file['storageKey'],
-                        $file['checksumSha256'],
-                        $ctx->userId,
-                    ],
+                $assetKey = "asset-{$materialKey}";
+
+                /*
+                 * The same reconciliation the campaign import does, and for two
+                 * reasons.
+                 *
+                 * The insert used to be unconditional, so a second import of the
+                 * same package would violate `uq_assets_external_key` and stop the
+                 * whole run. The demo seed never reaches here — its materials
+                 * reuse template visuals rather than carrying their own — which is
+                 * the only reason it has not been hit.
+                 *
+                 * And, as there, a row whose file is missing has to be repairable:
+                 * re-publish under the key the row already holds.
+                 */
+                $existingAsset = Db::one(
+                    'SELECT id, storage_path FROM assets WHERE external_key = ?',
+                    [$assetKey],
                 );
-                Storage::publish($file['temporaryPath'], $file['storageKey']);
-                $published[] = $file['storageKey'];
-                $ctx->recordItem('assets', "asset-{$materialKey}", $ownAssetId, ImportContext::CREATE);
+
+                if ($existingAsset !== null) {
+                    $ownAssetId = (string) $existingAsset['id'];
+                    $existingKey = (string) ($existingAsset['storage_path'] ?? '');
+
+                    if ($existingKey !== '' && !Storage::exists($existingKey)) {
+                        Storage::publish($file['temporaryPath'], $existingKey);
+                        $published[] = $existingKey;
+                        $ctx->recordItem('assets', $assetKey, $ownAssetId, ImportContext::UPDATE);
+                    } else {
+                        $ctx->recordItem('assets', $assetKey, $ownAssetId, ImportContext::UNCHANGED);
+                    }
+                } else {
+                    $ownAssetId = Ids::newId();
+                    Db::execute(
+                        'INSERT INTO assets
+                           (id, external_key, filename, original_filename, mime_type, file_size,
+                            storage_path, checksum_sha256, created_by)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [
+                            $ownAssetId,
+                            $assetKey,
+                            $file['filename'],
+                            $file['filename'],
+                            $file['mimeType'],
+                            $file['fileSize'],
+                            $file['storageKey'],
+                            $file['checksumSha256'],
+                            $ctx->userId,
+                        ],
+                    );
+                    Storage::publish($file['temporaryPath'], $file['storageKey']);
+                    $published[] = $file['storageKey'];
+                    $ctx->recordItem('assets', $assetKey, $ownAssetId, ImportContext::CREATE);
+                }
             }
 
             $values = [

@@ -69,8 +69,16 @@ export function useActivations(filters: ActivationFilters) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { quiet?: boolean }) => {
+    /*
+     * A quiet reload leaves the table on screen.
+     *
+     * `loading` unmounts the list in favour of "Se încarcă activările…", which
+     * is right on arrival and wrong when one row asks for fresh numbers: the
+     * reader loses their place, and the row action loses the button it was
+     * showing progress on. So the caller says which kind of reload this is.
+     */
+    if (!options?.quiet) setLoading(true);
     setError(null);
 
     const params = new URLSearchParams();

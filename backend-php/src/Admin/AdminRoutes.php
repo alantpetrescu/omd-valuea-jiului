@@ -26,6 +26,7 @@ use Omd\Http\ApiError;
 use Omd\Http\Request;
 use Omd\Http\Response;
 use Omd\Http\Router;
+use Omd\Shared\CodeIdentity;
 use Omd\Support\Ids;
 use Omd\Support\Password;
 use Omd\Support\Validate;
@@ -298,12 +299,36 @@ final class AdminRoutes
         Response::data($withUsage);
     }
 
+    /**
+     * Turns a duplicate-key violation into the conflict it actually is.
+     *
+     * `activation_channels` is unique on `label` as well as on `code`, and the
+     * others vary. Guessing "codul există deja" from the error number alone
+     * would have blamed the wrong field; reading the index name says which one
+     * collided. Anything that is not a duplicate is re-thrown untouched.
+     */
+    private static function catalogConflict(PDOException $error): never
+    {
+        if (!Db::isMysqlError($error, Db::ERR_DUPLICATE_ENTRY)) {
+            throw $error;
+        }
+
+        throw ApiError::conflict(
+            str_contains($error->getMessage(), '_label')
+                ? 'Există deja o valoare cu această denumire în acest nomenclator.'
+                : 'Există deja o valoare cu acest cod în acest nomenclator.',
+        );
+    }
+
     /** @return array{code:?string,label:string,displayLabel:?string,hint:?string,sortOrder:int} */
     private static function catalogInput(Request $request): array
     {
         $v = new Validate($request->body());
         $out = [
-            'code' => $v->nullableString('code', 100),
+            // 64, not 100: the column is `VARCHAR(64)`, and `nullableString`
+            // truncates rather than refuses — a 90-character code used to be
+            // silently cut down to something the author never typed.
+            'code' => $v->nullableString('code', CodeIdentity::MAX_LENGTH),
             'label' => $v->string('label', required: true, max: 255),
             'displayLabel' => $v->nullableString('displayLabel', 255),
             'hint' => $v->nullableString('hint'),
@@ -318,9 +343,8 @@ final class AdminRoutes
         $catalog = MasterRegistry::assertCatalog($request->param('catalog'));
         $input = self::catalogInput($request);
 
-        if ($input['code'] === null) {
-            throw ApiError::validation('Codul este obligatoriu.');
-        }
+        // Validated, never rewritten — the same rule the strategic repere follow.
+        $input['code'] = CodeIdentity::normalize($input['code']);
 
         $existing = Db::one("SELECT id FROM {$catalog} WHERE code = ?", [$input['code']]);
         if ($existing !== null) {
@@ -332,15 +356,19 @@ final class AdminRoutes
         // the registry decides it.
         $isSystem = MasterRegistry::isSystemCode($catalog, $input['code']) ? 1 : 0;
 
-        Db::execute(
-            "INSERT INTO {$catalog}
-               (id, code, label, display_label, hint, is_active, is_system, sort_order, created_by)
-             VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)",
-            [
-                $id, $input['code'], $input['label'], $input['displayLabel'], $input['hint'],
-                $isSystem, $input['sortOrder'], Guard::actorId($request),
-            ],
-        );
+        try {
+            Db::execute(
+                "INSERT INTO {$catalog}
+                   (id, code, label, display_label, hint, is_active, is_system, sort_order, created_by)
+                 VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)",
+                [
+                    $id, $input['code'], $input['label'], $input['displayLabel'], $input['hint'],
+                    $isSystem, $input['sortOrder'], Guard::actorId($request),
+                ],
+            );
+        } catch (PDOException $error) {
+            self::catalogConflict($error);
+        }
 
         Audit::write(
             userId: Guard::actorId($request),
@@ -361,20 +389,62 @@ final class AdminRoutes
         $input = self::catalogInput($request);
         $code = $request->param('code');
 
-        $row = Db::one("SELECT id, label FROM {$catalog} WHERE code = ?", [$code]);
+        $row = Db::one("SELECT id, label, is_system FROM {$catalog} WHERE code = ?", [$code]);
         if ($row === null) {
             throw ApiError::notFound("Valoarea {$code} nu a fost găsită.");
         }
 
-        // The code is identity and stays immutable; only presentation changes.
-        Db::execute(
-            "UPDATE {$catalog} SET label = ?, display_label = ?, hint = ?, sort_order = ?, updated_by = ?
-              WHERE id = ?",
-            [
-                $input['label'], $input['displayLabel'], $input['hint'],
-                $input['sortOrder'], Guard::actorId($request), $row['id'],
-            ],
-        );
+        /*
+         * `newCode` — a rename, allowed only while nothing depends on the code.
+         *
+         * The code used to be immutable outright, which is right for a value
+         * campaigns already point at or an import will look for again, and
+         * needlessly strict for one somebody typed wrong five minutes ago. The
+         * condition is the same one the strategic repere use, plus the system
+         * flag: a `is_system` value is compared by code in the application's own
+         * logic, so renaming it breaks behaviour and not only imports.
+         */
+        $body = $request->body();
+        $newCode = null;
+        if (array_key_exists('newCode', $body) && $body['newCode'] !== null && $body['newCode'] !== '') {
+            $candidate = CodeIdentity::normalize($body['newCode']);
+            if ($candidate !== $code) {
+                $newCode = $candidate;
+            }
+        }
+
+        if ($newCode !== null) {
+            $identity = self::catalogCodeIdentity($catalog, (string) $row['id'], (int) $row['is_system'] === 1);
+            if (!$identity['canEditCode']) {
+                throw CodeIdentity::lockedError(
+                    $code,
+                    $identity['dependencies'],
+                    $identity['importedAt'],
+                    $identity['isSystem'],
+                );
+            }
+
+            $clash = Db::one("SELECT id FROM {$catalog} WHERE code = ?", [$newCode]);
+            if ($clash !== null) {
+                throw ApiError::conflict("Codul {$newCode} există deja.");
+            }
+        }
+
+        try {
+            Db::execute(
+                "UPDATE {$catalog}
+                    SET code = ?, label = ?, display_label = ?, hint = ?, sort_order = ?, updated_by = ?
+                  WHERE id = ?",
+                [
+                    $newCode ?? $code, $input['label'], $input['displayLabel'], $input['hint'],
+                    $input['sortOrder'], Guard::actorId($request), $row['id'],
+                ],
+            );
+        } catch (PDOException $error) {
+            // Two admins editing onto the same value at once: the UNIQUE index is
+            // the arbiter, and its verdict is a conflict, not a 500.
+            self::catalogConflict($error);
+        }
 
         Audit::write(
             userId: Guard::actorId($request),
@@ -382,11 +452,37 @@ final class AdminRoutes
             entityType: strtoupper($catalog),
             entityId: (string) $row['id'],
             entityExternalKey: $code,
-            oldValues: ['label' => $row['label']],
-            newValues: ['label' => $input['label']],
+            // A rename is the one edit that cannot be read back from the row
+            // afterwards, so both codes go into the trail.
+            oldValues: $newCode !== null
+                ? ['label' => $row['label'], 'code' => $code]
+                : ['label' => $row['label']],
+            newValues: $newCode !== null
+                ? ['label' => $input['label'], 'code' => $newCode]
+                : ['label' => $input['label']],
         );
 
-        Response::data(['code' => $code]);
+        Response::data(['code' => $newCode ?? $code, 'renamedFrom' => $newCode !== null ? $code : null]);
+    }
+
+    /**
+     * Whether one catalog value's code may still be renamed, and why not.
+     *
+     * @return array{canEditCode:bool,dependencies:list<array<string,mixed>>,importedAt:?string,isSystem:bool,references:int}
+     */
+    private static function catalogCodeIdentity(string $catalog, string $id, bool $isSystem): array
+    {
+        $dependencies = self::dependenciesOf($catalog, $id);
+        $references = (int) array_sum(array_column($dependencies, 'count'));
+        $importedAt = CodeIdentity::importedAt($id);
+
+        return [
+            'canEditCode' => CodeIdentity::editable($references, $importedAt !== null, $isSystem),
+            'dependencies' => $dependencies,
+            'importedAt' => $importedAt,
+            'isSystem' => $isSystem,
+            'references' => $references,
+        ];
     }
 
     /** Dependency preview, so the UI can explain before it asks to confirm. */
@@ -400,15 +496,19 @@ final class AdminRoutes
             throw ApiError::notFound("Valoarea {$code} nu a fost găsită.");
         }
 
-        $dependencies = self::dependenciesOf($catalog, (string) $row['id']);
-        $total = array_sum(array_column($dependencies, 'count'));
+        $isSystem = (int) $row['is_system'] === 1;
+        $identity = self::catalogCodeIdentity($catalog, (string) $row['id'], $isSystem);
 
         Response::data([
-            'canDelete' => (int) $row['is_system'] !== 1 && $total === 0,
-            'canDeactivate' => (int) $row['is_system'] !== 1,
-            'isSystem' => (int) $row['is_system'] === 1,
+            'canDelete' => !$isSystem && $identity['references'] === 0,
+            'canDeactivate' => !$isSystem,
+            // Same shape the strategy screen reads, so one form component can
+            // explain a locked code without knowing which screen it is on.
+            'canEditCode' => $identity['canEditCode'],
+            'importedAt' => $identity['importedAt'],
+            'isSystem' => $isSystem,
             'isActive' => (int) $row['is_active'] === 1,
-            'dependencies' => $dependencies,
+            'dependencies' => $identity['dependencies'],
         ]);
     }
 

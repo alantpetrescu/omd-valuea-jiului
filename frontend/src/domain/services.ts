@@ -252,3 +252,23 @@ export function seasonalityMonthsLabel(months: number[] | null | undefined): str
   );
   return clean.length > 0 ? clean.map(monthName).join(' · ') : 'Nicio lună selectată';
 }
+
+/**
+ * A count with its noun, agreeing in Romanian.
+ *
+ * Romanian inflects a counted noun three ways, and the rule is on the last two
+ * digits: 1 takes the singular, 2–19 take the bare plural, and 0 or 20–99 take
+ * "de". `n === 1 ? one : many` therefore prints "1 campanii" and "20 campanii",
+ * both of which read as typos in an application the beneficiary uses daily.
+ *
+ *   countLabel(1, 'campanie', 'campanii')    -> "1 campanie"
+ *   countLabel(4, 'campanie', 'campanii')    -> "4 campanii"
+ *   countLabel(34, 'campanie', 'campanii')   -> "34 de campanii"
+ */
+export function countLabel(value: number, one: string, many: string): string {
+  if (value === 1) return `1 ${one}`;
+  const tail = value % 100;
+  const plural = tail === 0 || tail >= 20 ? `de ${many}` : many;
+  return `${formatNumber(value)} ${plural}`;
+}
+

@@ -22,8 +22,8 @@ Backend framework:          Express 4 + TypeScript 5 (CommonJS build)
 DB driver / ORM:            mysql2 — raw prepared statements, no ORM
 JSON Schema validator:      ajv (Draft 2020-12) — added in Stage 2
 Password hashing:           Argon2id — added in Stage 1 step 6
-Test framework:             to be selected (Stage 1 close-out)
-Browser E2E framework:      to be selected (Stage 5)
+Test framework:             none — `backend-php/tests/` is a plain PHP runner
+Browser E2E framework:      Playwright (visual parity + Administrare → Strategie)
 Process manager:            to be selected at deployment
 ```
 

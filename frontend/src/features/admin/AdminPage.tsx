@@ -13,10 +13,11 @@
  * Nomenclatoare: they are version-scoped, carry no `is_system` flag, and their
  * codes are unique per version rather than globally, so they get their own tab.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '../../api/client';
-import { formatDateTime } from '../../domain/services';
+import { useAuth } from '../auth/AuthContext';
+import { countLabel, formatDateTime } from '../../domain/services';
 import { StrategyAdminTab } from './StrategyAdminTab';
 
 type Tab = 'users' | 'catalogs' | 'strategy' | 'imports' | 'audit';
@@ -42,6 +43,39 @@ interface UserRow {
   isActive: number;
   mustChangePassword: number;
   lastLoginAt: string | null;
+}
+
+/**
+ * What may be done to one catalog value — the same shape the strategy screen
+ * reads for a reper, so both explain a locked code the same way.
+ */
+interface CatalogUsage {
+  canDelete: boolean;
+  canDeactivate: boolean;
+  canEditCode: boolean;
+  importedAt: string | null;
+  isSystem: boolean;
+  isActive: boolean;
+  dependencies: Array<{ type: string; count: number }>;
+}
+
+/**
+ * Dependency types, in Romanian.
+ *
+ * The API sends `CAMPAIGN`, `ACTIVATION`, `ACTIVATION_MATERIAL` — the entity
+ * constants the `409 ENTITY_IN_USE` contract (§35.1.2) is defined in, so they
+ * stay as they are on the wire. Translating them is the screen's job: „folosită
+ * în 7 CAMPAIGN" is a stack trace, not a sentence.
+ */
+const DEPENDENCY_NOUNS: Record<string, [string, string]> = {
+  CAMPAIGN: ['campanie', 'campanii'],
+  ACTIVATION: ['activare', 'activări'],
+  ACTIVATION_MATERIAL: ['material de activare', 'materiale de activare'],
+};
+
+function dependencyPhrase(entry: { type: string; count: number }): string {
+  const [one, many] = DEPENDENCY_NOUNS[entry.type] ?? [entry.type, entry.type];
+  return countLabel(entry.count, one, many);
 }
 
 interface CatalogRow {
@@ -89,9 +123,42 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export function AdminPage() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('users');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  /*
+   * The `Administrare` link is hidden for non-ADMIN, but the route is not: typing
+   * `/admin` or following an old bookmark lands here.
+   *
+   * Before this, the page rendered in full and every tab's request came back
+   * `403`, so the screen filled with error notes that read like a broken
+   * application rather than a closed door. Saying so once, plainly, is the whole
+   * fix.
+   */
+  if (user !== null && user.role !== 'ADMIN') {
+    return (
+      <>
+        <header className="page-head">
+          <div>
+            <h1>Administrare</h1>
+            <p>Această secțiune este disponibilă doar administratorilor.</p>
+          </div>
+        </header>
+
+        <section className="activation-empty">
+          <div>⌘</div>
+          <h3>Nu ai drepturi pentru administrare</h3>
+          <p>
+            Contul tău are rolul {ROLE_LABELS[user.role] ?? user.role}. Utilizatorii, nomenclatoarele,
+            reperele strategice, importurile și jurnalul de audit se administrează din contul unui
+            administrator.
+          </p>
+        </section>
+      </>
+    );
+  }
 
   return (
     <>
@@ -346,6 +413,16 @@ function CatalogsTab({
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ code: '', label: '', displayLabel: '', hint: '', sortOrder: 0 });
 
+  /*
+   * Whether the code being edited may still be renamed, straight from the API.
+   *
+   * Not a guess from the row: the answer also depends on whether an import ever
+   * wrote this value, which the list does not carry. Null while the answer is in
+   * flight, and on failure — the safe direction, since a rename that should have
+   * been refused is worse than one the user has to ask for again.
+   */
+  const [codeUsage, setCodeUsage] = useState<CatalogUsage | null>(null);
+
   const load = useCallback(
     async (target: string) => {
       try {
@@ -362,12 +439,82 @@ function CatalogsTab({
     void load(catalog);
   }, [catalog, load]);
 
+  const codeEditable = creating || codeUsage?.canEditCode === true;
+
+  /*
+   * Why the code is locked, in the reader's terms.
+   *
+   * Three different reasons, and they call for three different sentences: a
+   * system value is structural, a referenced one would break records that point
+   * at it, an imported one would break the next import. "Nu se poate" says none
+   * of that.
+   */
+  const codeLockReason = useMemo(() => {
+    if (creating || codeEditable) return null;
+    if (codeUsage === null) return 'nu am putut verifica dacă acest cod mai poate fi schimbat';
+    if (codeUsage.isSystem) return 'este o valoare necesară funcționării aplicației';
+
+    const used = codeUsage.dependencies
+      .filter((entry) => entry.count > 0)
+      .map(dependencyPhrase)
+      .join(', ');
+    if (used !== '') return `folosită în ${used}`;
+
+    if (codeUsage.importedAt !== null) {
+      const date = new Date(codeUsage.importedAt.replace(' ', 'T'));
+      return `adusă prin importul din ${
+        Number.isNaN(date.getTime())
+          ? codeUsage.importedAt
+          : date.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      }`;
+    }
+    return 'codul nu mai poate fi schimbat';
+  }, [creating, codeEditable, codeUsage]);
+
+  /*
+   * The convention already in use, offered rather than imposed (SPEC §3.2).
+   *
+   * This replaces the `toUpperCase()` that used to rewrite the field as you
+   * typed: the catalogs really are uppercase by convention, so the convention is
+   * worth showing — it just is not the application's to enforce.
+   */
+  const conventionHint = useMemo(() => {
+    if (!creating || rows.length === 0) return null;
+    const sample = rows.slice(0, 4).map((row) => row.code);
+    return `Convenția folosită aici: ${sample.join(', ')}${rows.length > sample.length ? ', …' : ''}`;
+  }, [creating, rows]);
+
+  /** Opens the editor for one value, and asks what may be done to its code. */
+  async function beginEdit(row: CatalogRow) {
+    setCreating(false);
+    setEditing(row.code);
+    setCodeUsage(null);
+    setForm({
+      code: row.code,
+      label: row.label,
+      displayLabel: row.displayLabel ?? '',
+      hint: row.hint ?? '',
+      sortOrder: row.sortOrder,
+    });
+    onError(null);
+
+    try {
+      const response = await api.get<CatalogUsage>(
+        `/admin/catalogs/${catalog}/${encodeURIComponent(row.code)}/usage`,
+      );
+      setCodeUsage(response.data);
+    } catch {
+      setCodeUsage(null);
+    }
+  }
+
   async function save() {
     onError(null);
     try {
       if (editing) {
-        await api.put(`/admin/catalogs/${catalog}/${encodeURIComponent(editing)}`, form);
-        onNotice(`Valoarea ${editing} a fost actualizată.`);
+        const payload = form.code !== editing ? { ...form, newCode: form.code } : form;
+        await api.put(`/admin/catalogs/${catalog}/${encodeURIComponent(editing)}`, payload);
+        onNotice(`Valoarea ${form.code} a fost actualizată.`);
       } else {
         await api.post(`/admin/catalogs/${catalog}`, form);
         onNotice(`Valoarea ${form.code} a fost creată.`);
@@ -434,17 +581,36 @@ function CatalogsTab({
 
       {creating || editing ? (
         <div className="wizard-body">
-          {creating ? (
-            <label className="form-field">
-              <span className="form-label">
-                Cod<small>Identitatea valorii; nu se mai poate schimba după creare</small>
-              </span>
-              <input
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-              />
-            </label>
-          ) : null}
+          {/*
+            The code, shown in both modes.
+
+            It used to appear only on creation, with a note saying it could never
+            change. It can, while nothing depends on it — and hiding the field at
+            all left the reader with no way to see what the code even was without
+            leaving the form. Read-only with the reason underneath says more than
+            an absent field ever did.
+          */}
+          <label className="form-field">
+            <span className="form-label">
+              Cod
+              {creating && conventionHint ? <small>{conventionHint}</small> : null}
+              {!creating && codeLockReason ? (
+                <small>Codul nu poate fi schimbat: {codeLockReason}.</small>
+              ) : null}
+            </span>
+            {/*
+              No `toUpperCase()`. It silently rewrote what the author typed, and
+              it is the one thing the code rule forbids — the application
+              validates a code, it does not correct it. The convention is
+              suggested above instead, built from the codes already in this
+              nomenclator.
+            */}
+            <input
+              value={form.code}
+              disabled={!codeEditable}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+            />
+          </label>
           <label className="form-field">
             <span className="form-label">Denumire</span>
             <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
@@ -522,17 +688,7 @@ function CatalogsTab({
                   <button
                     className="btn secondary"
                     type="button"
-                    onClick={() => {
-                      setEditing(row.code);
-                      setCreating(false);
-                      setForm({
-                        code: row.code,
-                        label: row.label,
-                        displayLabel: row.displayLabel ?? '',
-                        hint: row.hint ?? '',
-                        sortOrder: row.sortOrder,
-                      });
-                    }}
+                    onClick={() => void beginEdit(row)}
                   >
                     Editează
                   </button>

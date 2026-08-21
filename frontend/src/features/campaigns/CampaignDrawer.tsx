@@ -29,6 +29,7 @@ import {
   type CampaignDetail,
   type CampaignTabId,
 } from './CampaignDetailPage';
+import { ActivationDrawer } from '../activations/ActivationDrawer';
 
 type ViewMode = 'tabs' | 'full';
 
@@ -56,6 +57,15 @@ export function CampaignDrawer({
   const [view, setView] = useState<ViewMode>('tabs');
   const [tab, setTab] = useState<CampaignTabId>('overview');
   const [popupBlocked, setPopupBlocked] = useState(false);
+
+  /*
+   * An activation from the "Activări create" list, stacked over this drawer.
+   *
+   * The prototype does the same: opening an activation from a campaign does not
+   * dismiss the campaign. You check the execution and come back to the frame it
+   * belongs to, which is the whole reason the two are shown together.
+   */
+  const [openActivation, setOpenActivation] = useState<string | null>(null);
 
   // The print document is built from the rendered DOM rather than re-rendered,
   // so what gets printed is exactly what is on screen. Safe because both
@@ -135,18 +145,33 @@ export function CampaignDrawer({
   // Escape closes, and the page behind must not scroll while the drawer is open.
   const close = useCallback(() => onClose(), [onClose]);
 
+  /*
+   * The scroll lock is tied to this drawer existing, and to nothing else.
+   *
+   * It used to share an effect with the Escape handler. Once that handler had to
+   * know whether an activation was stacked on top, the shared effect re-ran on
+   * every stack change — and each re-run saved the *current* overflow as the one
+   * to restore. By the time both drawers closed, the value saved was `hidden`,
+   * so the page behind stayed unscrollable with nothing on screen to explain it.
+   */
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    document.addEventListener('keydown', onKey);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previousOverflow;
     };
-  }, [close]);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      // Not while an activation is stacked on top: both drawers listen on
+      // `document`, so one keypress would dismiss the pair — you would ask to
+      // close the activation and lose the campaign underneath it too.
+      if (event.key === 'Escape' && openActivation === null) close();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [close, openActivation]);
 
   const summary = campaign
     ? truncate(campaign.mainMessage || campaign.marketingObjective || '', 270)
@@ -231,7 +256,11 @@ export function CampaignDrawer({
           ) : null}
           {!loading && !error && campaign ? (
             <CampaignTabContext.Provider value={view === 'full' ? null : tab}>
-              <CampaignBlocks campaign={campaign} activations={activations} />
+              <CampaignBlocks
+                campaign={campaign}
+                activations={activations}
+                onOpenActivation={setOpenActivation}
+              />
             </CampaignTabContext.Provider>
           ) : null}
         </div>
@@ -271,6 +300,19 @@ export function CampaignDrawer({
           ) : null}
         </footer>
       </aside>
+
+      {/*
+        Stacked over this drawer. Its "Vezi campania" button simply closes it —
+        the campaign it would open is the one already underneath, so opening a
+        third drawer for it would be showing you where you already are.
+      */}
+      {openActivation ? (
+        <ActivationDrawer
+          externalKey={openActivation}
+          onClose={() => setOpenActivation(null)}
+          onOpenCampaign={() => setOpenActivation(null)}
+        />
+      ) : null}
     </>
   );
 }

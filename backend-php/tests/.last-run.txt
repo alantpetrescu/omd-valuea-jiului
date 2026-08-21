@@ -1,0 +1,167 @@
+[1mSuita de teste — repere strategice[0m
+
+[1mUnitare — reguli pure (fără bază de date)[0m
+  [32m✓[0m AS-B-U01   naturalCompare('P5.2','P5.10') este negativ — P5.2 primul
+  [32m✓[0m AS-B-U02   naturalCompare('D6.10','D6.9') este pozitiv — D6.9 primul
+  [32m✓[0m AS-B-U03   naturalCompare('PILLAR_1','PILLAR_2') este negativ
+  [32m✓[0m AS-B-U04   naturalCompare('AB','AA') este pozitiv — coduri fără cifre
+  [32m✓[0m AS-B-U01b  sortarea completă a unei liste de coduri
+  [32m✓[0m AS-B-U05   codeEditable(0, false) → true
+  [32m✓[0m AS-B-U06   codeEditable(1, false) → false
+  [32m✓[0m AS-B-U07   codeEditable(0, true) → false
+  [32m✓[0m AS-B-A30   prima versiune din bază este creată ACTIVE
+  [32m✓[0m AS-B-A29c  o versiune nouă lângă altele este DRAFT
+  [32m✓[0m AS-B-U08a  codul '' este respins
+  [32m✓[0m AS-B-U08b  codul '   ' este respins
+  [32m✓[0m AS-B-U08c  codul de 65 de caractere este respins
+  [32m✓[0m AS-B-U08d  codul lipsă este respins
+  [32m✓[0m AS-B-U08e  codul de 64 de caractere este acceptat
+  [32m✓[0m AS-B-U09   codul „D6.1” trece neschimbat
+  [32m✓[0m AS-B-U09   codul „p5.9” trece neschimbat
+  [32m✓[0m AS-B-U09   codul „A-1” trece neschimbat
+  [32m✓[0m AS-B-U09   codul „OS2” trece neschimbat
+  [32m✓[0m AS-B-U09   codul „obiectiv 2” trece neschimbat
+  [32m✓[0m AS-B-U09   codul „P5.1” trece neschimbat
+  [32m✓[0m AS-B-U09b  spațiile din jur sunt tăiate (coliziunea NO PAD)
+Server de test pe http://127.0.0.1:8099, baza omd_vj_test
+
+[1mBază de date — constrângeri și tranzacții[0m
+  [32m✓[0m AS-B-D01   două repere cu același cod în aceeași versiune — respins de UNIQUE
+  [32m✓[0m AS-B-D02   codul „OS1” acceptat și în a doua versiune
+  [32m✓[0m AS-B-D03   DELETE pe un pilon referit de o campanie — blocat de FK RESTRICT
+  [32m✓[0m AS-B-D04   DELETE pe o versiune cu campanii — blocat de FK RESTRICT
+  [32m✓[0m AS-B-D11   ștergere eșuată la mijloc — rollback complet
+
+[1mAPI — versiuni, clonare[0m
+  [32m✓[0m AS-B-A31   POST versions cu cloneFromExternalKey inexistent → 404
+  [32m✓[0m AS-B-A29a  POST versions cu clonare → 201
+  [32m✓[0m AS-B-A29b  statusul noii versiuni este DRAFT
+
+[1mClonare — AS-B-D05…D09[0m
+  [32m✓[0m AS-B-D05   numărul de piloni/programe/obiective este identic
+  [32m✓[0m AS-B-D06   numărul de relații program↔obiectiv este identic
+  [32m✓[0m AS-B-D07   niciun UUID nu este împărțit cu sursa
+  [32m✓[0m AS-B-D08   codurile clonate sunt identice cu ale sursei
+  [32m✓[0m AS-B-D09   campaniile vechi pointează în continuare la UUID-urile vechi
+
+[1mAPI — creare repere[0m
+  [32m✓[0m AS-B-A01a  POST pilon nou valid → 201
+  [32m✓[0m AS-B-A01b  pilonul nou apare în GET /strategy
+  [32m✓[0m AS-B-A08a  POST obiectiv nou → 201
+  [32m✓[0m AS-B-A08b  sort_order la creare este maximul curent + 1
+  [32m✓[0m AS-B-A02a  POST program cu objectiveCodes → 201
+  [32m✓[0m AS-B-A02b  relațiile program↔obiectiv au fost create
+  [32m✓[0m AS-B-A03a  POST cu cod deja existent → 409
+  [32m✓[0m AS-B-A03b  codul de eroare este CONFLICT
+  [32m✓[0m AS-B-A04   POST cu cod vid → 422
+  [32m✓[0m AS-B-A05   POST cu cod de 65 de caractere → 422
+  [32m✓[0m AS-B-A06a  POST cu code 'p5.9' → 201
+  [32m✓[0m AS-B-A06b  codul este stocat exact 'p5.9' — validat, nu transformat
+  [32m✓[0m AS-B-A07   POST cu 'D6.1' într-o versiune P5.x → 201, convenția nu se impune
+
+[1mAPI — editare și redenumire[0m
+  [32m✓[0m AS-B-A09a  PUT cu newCode pe un reper nefolosit și neimportat → 200
+  [32m✓[0m AS-B-A09b  codul a fost schimbat în baza de date
+  [32m✓[0m AS-B-A10a  PUT cu newCode pe un pilon folosit de o campanie → 409
+  [32m✓[0m AS-B-A10b  codul de eroare este CODE_LOCKED
+  [32m✓[0m AS-B-A11a  PUT cu newCode pe un reper adus prin import → 409
+  [32m✓[0m AS-B-A11b  codul de eroare este CODE_LOCKED
+  [32m✓[0m AS-B-A12a  PUT cu newCode deja existent în versiune → 409
+  [32m✓[0m AS-B-A12b  codul de eroare este CONFLICT
+  [32m✓[0m AS-B-A13a  PUT program cu objectiveCodes schimbate → 200
+  [32m✓[0m AS-B-A13b  relațiile sunt înlocuite, nu adăugate
+  [32m✓[0m AS-B-A14a  PUT cu un objectiveCode din altă versiune → 422
+  [32m✓[0m AS-B-A14b  nicio scriere parțială — relațiile au rămas neatinse
+  [32m✓[0m AS-B-A15a  PUT fără un câmp obligatoriu → 422
+  [32m✓[0m AS-B-A15b  valorile vechi au rămas neatinse
+
+[1mAPI — usage și ștergere[0m
+  [32m✓[0m AS-B-A20a  GET usage pe un reper folosit → 200
+  [32m✓[0m AS-B-A20b  canDelete este false
+  [32m✓[0m AS-B-A20c  business este populat
+  [32m✓[0m AS-B-A21a  GET usage pe un reper importat: canEditCode false
+  [32m✓[0m AS-B-A21b  importedAt este nenul
+  [32m✓[0m AS-B-A16a  DELETE reper cu 0 referințe → 204
+  [32m✓[0m AS-B-A16b  rândul a dispărut
+  [32m✓[0m AS-B-A17a  DELETE reper folosit → 409
+  [32m✓[0m AS-B-A17b  codul de eroare este ENTITY_IN_USE
+  [32m✓[0m AS-B-A17c  details.allowedAction este DEACTIVATE
+  [32m✓[0m AS-B-A18a  DELETE obiectiv prezent în matrice, fără campanii → 204
+  [32m✓[0m AS-B-A18b  relațiile lui din matrice au dispărut în aceeași tranzacție
+  [32m✓[0m AS-B-D10   reperul avea relații de șters
+  [32m✓[0m AS-B-A19a  usage spune că se poate șterge
+  [32m✓[0m AS-B-A19b  DELETE după ce a apărut o campanie → 409
+  [32m✓[0m AS-B-A19c  verificarea s-a repetat: ENTITY_IN_USE
+
+[1mAPI — metadate, arhivare, ștergere de versiune[0m
+  [32m✓[0m AS-B-A22a  PUT metadate versiune → 200
+  [32m✓[0m AS-B-A22b  label-ul s-a schimbat
+  [32m✓[0m AS-B-A23   externalKey trimis în body este ignorat, nu eroare
+  [32m✓[0m AS-B-A27a  POST archive pe o versiune DRAFT → 200
+  [32m✓[0m AS-B-A27b  statusul este ARCHIVED
+  [32m✓[0m AS-B-A28a  POST archive pe versiunea ACTIVE → 409
+  [32m✓[0m AS-B-A28b  codul de eroare este VERSION_ACTIVE
+  [32m✓[0m AS-B-A25a  DELETE versiunea ACTIVE → 409
+  [32m✓[0m AS-B-A25b  codul de eroare este VERSION_ACTIVE
+  [32m✓[0m AS-B-A26a  DELETE versiune cu campanii → 409
+  [32m✓[0m AS-B-A26b  codul de eroare este ENTITY_IN_USE
+
+[1mAPI — permisiuni și audit[0m
+  [32m✓[0m AS-B-A32   EDITOR → orice scriere pe strategie este 403
+  [32m✓[0m AS-B-A33   VIEWER → orice scriere pe strategie este 403
+  [32m✓[0m AS-B-A34   EDITOR poate citi GET /strategy și GET usage
+  [32m✓[0m AS-B-A35   fiecare scriere reușită lasă o linie STRATEGY_CHANGE în audit_log
+  [32m✓[0m AS-B-A36   audit_log la redenumire conține codul vechi și pe cel nou
+
+[1mAPI — curățenie[0m
+  [32m✓[0m AS-B-A24a  DELETE pe o versiune ARCHIVED → 409 (doar DRAFT se șterge)
+  [32m✓[0m AS-B-A24b  DELETE versiune DRAFT fără campanii → 204
+  [32m✓[0m AS-B-A24c  versiunea avea repere de șters
+  [32m✓[0m AS-B-A24d  reperele versiunii au dispărut odată cu ea
+
+[1mNomenclatoare — identitatea codului[0m
+  [32m✓[0m AS-C-01    POST valoare nouă → 201
+  [32m✓[0m AS-C-02a   POST cu litere mici → 201
+  [32m✓[0m AS-C-02b   codul este stocat exact așa cum a fost trimis — validat, nu transformat
+  [32m✓[0m AS-C-03    POST cu cod vid → 422
+  [32m✓[0m AS-C-04a   POST cu cod de 65 de caractere → 422
+  [32m✓[0m AS-C-04b   codul lung nu a fost trunchiat și salvat pe ascuns
+  [32m✓[0m AS-C-05a   GET usage pe o valoare nouă → 200
+  [32m✓[0m AS-C-05b   canEditCode este true pentru o valoare nefolosită
+  [32m✓[0m AS-C-05c   importedAt este raportat, și este null
+  [32m✓[0m AS-C-06a   PUT cu newCode pe o valoare nefolosită → 200
+  [32m✓[0m AS-C-06b   codul s-a schimbat în baza de date
+  [32m✓[0m AS-C-07a   PUT cu newCode deja existent → 409
+  [32m✓[0m AS-C-07b   codul de eroare este CONFLICT
+  [32m✓[0m AS-C-08a   usage pe o valoare de sistem: canEditCode false
+  [32m✓[0m AS-C-08b   PUT cu newCode pe o valoare de sistem → 409
+  [32m✓[0m AS-C-08c   codul de eroare este CODE_LOCKED
+  [32m✓[0m AS-C-08d   codul de sistem a rămas neatins
+  [32m✓[0m AS-C-09a   usage pe o valoare folosită: canEditCode false
+  [32m✓[0m AS-C-09b   canDelete este false
+  [32m✓[0m AS-C-10a   PUT cu newCode pe o valoare folosită → 409
+  [32m✓[0m AS-C-10b   codul de eroare este CODE_LOCKED
+  [32m✓[0m AS-C-10c   codul a rămas neatins
+  [32m✓[0m AS-C-11a   PUT fără newCode pe o valoare folosită → 200
+  [32m✓[0m AS-C-11b   eticheta s-a schimbat, codul nu
+  [32m✓[0m AS-C-12a   usage pe o valoare importată: canEditCode false
+  [32m✓[0m AS-C-12b   importedAt este nenul
+  [32m✓[0m AS-C-14    nomenclatorul are exact aceleași valori ca la început
+
+[1mDialect — MySQL și MariaDB[0m
+  [32m✓[0m AS-D-01    MariaDB e recunoscută după nume, nu după numărul de versiune
+  [32m✓[0m AS-D-02    version_compare singur ar fi declarat MariaDB 10.11 drept „MySQL 8+"
+  [32m✓[0m AS-D-03    setul MariaDB există
+  [32m✓[0m AS-D-04    aceleași nume de fișiere în ambele seturi
+  [32m✓[0m AS-D-05    nicio colație MySQL rămasă în setul MariaDB
+  [32m✓[0m AS-D-06    fiecare colație înlocuită, una la una
+  [32m✓[0m AS-D-07    același număr de instrucțiuni în fiecare fișier
+  [32m✓[0m AS-D-08    setul generat este la zi față de sursă
+
+[1mRegresie — starea de plecare[0m
+  [32m✓[0m AS-B-R03   versiunea sursă are 4 piloni
+  [32m✓[0m AS-B-R03   versiunea sursă are 8 programe
+  [32m✓[0m AS-B-R03   versiunea sursă are 18 obiective
+  [32m✓[0m AS-B-R02   niciun reper adus prin import nu are codul editabil — importul rămâne idempotent
+
+[32m137 verificări trecute[0m în 4.2s

@@ -20,7 +20,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { api } from '../../api/client';
-import { formatDateTime } from '../../domain/services';
+import { countLabel, formatDateTime, formatNumber } from '../../domain/services';
 import { useAuth } from '../auth/AuthContext';
 
 const TABS = [
@@ -35,9 +35,29 @@ type TabId = (typeof TABS)[number][0];
 
 interface ImportRow {
   packageType: string;
+  filename: string | null;
   status: string;
   createdCount: number;
+  updatedCount: number;
+  warningCount: number;
   completedAt: string | null;
+}
+
+/**
+ * What each package actually put in the database, read back now.
+ *
+ * The prototype's cards carry the same figures straight from its in-memory
+ * repositories. Here they are five ordinary reads any signed-in role may make,
+ * which matters: the badge has to say what is in the database, not what the
+ * package claimed to contain.
+ */
+interface DataCounts {
+  campaigns: number;
+  activations: number;
+  annualPlans: number;
+  measuredMaterials: number;
+  mentions: number;
+  reviews: number;
 }
 
 const ROUTE_NAMES: Record<string, string> = {
@@ -533,51 +553,143 @@ function Workflow() {
   );
 }
 
-function DataTab({ imports, isAdmin }: { imports: ImportRow[]; isAdmin: boolean }) {
+/*
+ * Date & import/export — the prototype's `dataPortability()`.
+ *
+ * Its shape, element for element: an intro, one status band, a two-column grid
+ * of package cards each ending in a `data-portability-status` badge, and a
+ * footnote. The earlier version of this tab rendered plain articles with no
+ * badge and no band, so the stylesheet's two-row card grid had only one row to
+ * lay out and the tab read as a column of paragraphs.
+ *
+ * The words differ where the prototype describes itself. It loads four JSON
+ * files into browser storage at start-up and reports on that; here the import
+ * runs on the server, one transaction per package, and is recorded in
+ * `import_batches`. Copying its sentences across would have the product claim a
+ * mechanism it does not have.
+ */
+function DataTab({
+  imports,
+  counts,
+  countsFailed,
+  isAdmin,
+}: {
+  imports: ImportRow[];
+  counts: DataCounts | null;
+  countsFailed: boolean;
+  isAdmin: boolean;
+}) {
+  /* Most recent run per package, for the real file name on each card. Only
+     ADMIN may read the history, so every other role sees the contract name. */
+  const lastRun = new Map<string, ImportRow>();
+  for (const row of imports) {
+    if (!lastRun.has(row.packageType)) lastRun.set(row.packageType, row);
+  }
+
+  const cards = [
+    {
+      code: 'CAMPANII',
+      packageType: 'OMD_CAMPAIGNS_PACKAGE',
+      description: 'Strategie, nomenclatoare, campanii, machete și vizualuri.',
+      value: counts ? countLabel(counts.campaigns, 'campanie', 'campanii') : '—',
+      loaded: (counts?.campaigns ?? 0) > 0,
+    },
+    {
+      code: 'ACTIVĂRI',
+      packageType: 'OMD_ACTIVATIONS_PACKAGE',
+      description: 'Activări, materiale, bugete, KPI și selecțiile din Planul anual.',
+      value: counts
+        ? `${countLabel(counts.activations, 'activare', 'activări')} · ${countLabel(
+            counts.annualPlans,
+            'an în plan',
+            'ani în plan',
+          )}`
+        : '—',
+      loaded: (counts?.activations ?? 0) > 0,
+    },
+    {
+      code: 'MONITORIZARE ACTIVĂRI',
+      packageType: 'OMD_ACTIVATION_MONITORING_PACKAGE',
+      description: 'Instantanee de performanță legate de activare și de material.',
+      value: counts
+        ? countLabel(counts.measuredMaterials, 'material măsurat', 'materiale măsurate')
+        : '—',
+      loaded: (counts?.measuredMaterials ?? 0) > 0,
+    },
+    {
+      code: 'MONITORIZARE REPUTAȚIE',
+      packageType: 'OMD_REPUTATION_MONITORING_PACKAGE',
+      description: 'Instantaneu reputațional, independent de campanii și activări.',
+      value: counts
+        ? `${countLabel(counts.mentions, 'mențiune', 'mențiuni')} · ${countLabel(
+            counts.reviews,
+            'review',
+            'review-uri',
+          )}`
+        : '—',
+      loaded: (counts?.mentions ?? 0) > 0 || (counts?.reviews ?? 0) > 0,
+    },
+  ];
+
+  /*
+   * The band the prototype puts above the grid, said in terms this application
+   * can verify: what is in the database right now. The prototype reports the
+   * outcome of its own browser-side import, which has no counterpart here.
+   *
+   * The last run is appended only for ADMIN — the one role allowed to read
+   * `import_batches`, and the one role that can act on what it says.
+   */
+  const missing = cards.filter((card) => !card.loaded);
+  const latest = imports[0];
+
+  let bandClass = 'ok';
+  let bandText = 'Toate cele patru pachete sunt încărcate.';
+
+  if (countsFailed || !counts) {
+    bandClass = 'error';
+    bandText = 'Starea datelor nu a putut fi citită.';
+  } else if (missing.length > 0) {
+    bandClass = 'warn';
+    bandText = `Fără date din: ${missing.map((card) => card.code.toLowerCase()).join(', ')}.`;
+  }
+
+  const bandSuffix =
+    isAdmin && latest
+      ? ` · ultimul import ${latest.packageType}${
+          latest.completedAt ? `, ${formatDateTime(latest.completedAt)}` : ''
+        }`
+      : '';
+
   return (
     <>
       <section className="about-intro">
-        <h2>De unde vin datele</h2>
+        <h2>Date externe &amp; import</h2>
         <p>
-          Datele de business intră în sistem prin patru pachete JSON, validate față de contractele din{' '}
-          <code>contracts/</code>. Importul se face pe server, nu din interfață: fiecare rulare se
-          desfășoară într-o tranzacție, iar la orice eroare nu rămâne nimic pe jumătate scris.
+          Datele de business intră prin patru pachete JSON, validate față de contractele din{' '}
+          <code>contracts/</code>. Importul rulează pe server, nu din interfață: fiecare pachet într-o
+          tranzacție, iar la orice eroare nu rămâne nimic pe jumătate scris. Cifrele de mai jos sunt
+          citite acum din baza de date, nu preluate din pachet.
         </p>
       </section>
 
+      <div className={`data-portability-status ${bandClass}`} role="status">
+        {bandText}
+        {bandSuffix}
+      </div>
+
       <div className="data-portability-grid">
-        <article className="data-portability-card">
-          <small className="entity-code">OMD_CAMPAIGNS_PACKAGE</small>
-          <h3>Campanii</h3>
-          <p>
-            Aduce versiunea strategică, pilonii, programele, obiectivele, cele zece nomenclatoare și
-            campaniile cu machetele și vizualele lor. Se importă primul: tot restul se leagă de el.
-          </p>
-        </article>
-        <article className="data-portability-card">
-          <small className="entity-code">OMD_ACTIVATIONS_PACKAGE</small>
-          <h3>Activări</h3>
-          <p>
-            Activările cu perioade, bugete, publicuri, surse de finanțare, materiale și KPI, plus
-            selecțiile manuale din Planul anual.
-          </p>
-        </article>
-        <article className="data-portability-card">
-          <small className="entity-code">OMD_ACTIVATION_MONITORING_PACKAGE</small>
-          <h3>Rezultate pe materiale</h3>
-          <p>
-            Instantanee de performanță pentru fiecare material și canal. Un instantaneu nou nu
-            suprascrie unul vechi — istoricul se păstrează.
-          </p>
-        </article>
-        <article className="data-portability-card">
-          <small className="entity-code">OMD_REPUTATION_MONITORING_PACKAGE</small>
-          <h3>Reputație</h3>
-          <p>
-            Mențiuni, review-uri, sentiment, teme și surse pentru destinație. Alimentează exclusiv
-            ecranul „Monitorizare reputație”.
-          </p>
-        </article>
+        {cards.map((card) => (
+          <section className="data-portability-card" key={card.packageType}>
+            <div>
+              <small className="entity-code">{card.code}</small>
+              <h3>{lastRun.get(card.packageType)?.filename || card.packageType}</h3>
+              <p>{card.description}</p>
+            </div>
+            <div className={`data-portability-status ${card.loaded ? 'ok' : 'warn'}`}>
+              {card.value}
+            </div>
+          </section>
+        ))}
       </div>
 
       <div className="about-accordion">
@@ -621,13 +733,15 @@ function DataTab({ imports, isAdmin }: { imports: ImportRow[]; isAdmin: boolean 
           {imports.length === 0 ? (
             <p>Nu există importuri înregistrate.</p>
           ) : (
-            <div className="drawer-table-scroll">
-              <table className="stage-table">
+            <div className="data-portability-preview">
+              <table>
                 <thead>
                   <tr>
                     <th>Pachet</th>
                     <th>Stare</th>
                     <th>Create</th>
+                    <th>Actualizate</th>
+                    <th>Avertismente</th>
                     <th>Finalizat</th>
                   </tr>
                 </thead>
@@ -638,7 +752,9 @@ function DataTab({ imports, isAdmin }: { imports: ImportRow[]; isAdmin: boolean 
                         <span className="entity-code">{row.packageType}</span>
                       </td>
                       <td>{row.status}</td>
-                      <td>{row.createdCount}</td>
+                      <td>{formatNumber(row.createdCount)}</td>
+                      <td>{formatNumber(row.updatedCount)}</td>
+                      <td>{formatNumber(row.warningCount)}</td>
                       <td>{row.completedAt ? formatDateTime(row.completedAt) : '—'}</td>
                     </tr>
                   ))}
@@ -650,8 +766,9 @@ function DataTab({ imports, isAdmin }: { imports: ImportRow[]; isAdmin: boolean 
       ) : null}
 
       <p className="data-portability-footnote">
-        Exportul unei campanii este disponibil din fișa ei, în format compatibil cu contractul de
-        import.
+        În producție, importurile pot fi făcute independent. Campaniile reale se importă din
+        OMD_CAMPAIGNS_PACKAGE; activările pot fi create direct în aplicație; monitorizarea activărilor
+        se importă ulterior după <code>externalKey</code>.
       </p>
     </>
   );
@@ -666,6 +783,8 @@ export function AboutPage() {
   const [tab, setTab] = useState<TabId>(() => tabForRoute(from));
   const [contextShown, setContextShown] = useState(Boolean(from));
   const [imports, setImports] = useState<ImportRow[]>([]);
+  const [counts, setCounts] = useState<DataCounts | null>(null);
+  const [countsFailed, setCountsFailed] = useState(false);
 
   const isAdmin = user?.role === 'ADMIN';
 
@@ -692,6 +811,54 @@ export function AboutPage() {
       .then((response) => setImports(response.data))
       .catch(() => setImports([]));
   }, [isAdmin]);
+
+  /*
+   * What each package left behind, counted now.
+   *
+   * Five reads rather than one summary endpoint, because each figure already
+   * has an owner: the campaign list knows how many campaigns there are, the
+   * monitoring summary knows how many materials carry measurements. Adding a
+   * sixth endpoint to repeat them would give the same numbers a second place to
+   * be wrong.
+   *
+   * One failure fails the set. A card reading "0 campanii" because a request
+   * did not arrive is worse than saying the state could not be read: the first
+   * claims an empty database.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.all([
+      api.get<unknown[]>('/campaigns?pageSize=1'),
+      api.get<{ total: number }>('/activations/stats'),
+      api.get<unknown[]>('/annual-plans'),
+      api.get<{ materials: number }>('/monitoring/activations/summary'),
+      api.get<{ mentionsCount: number | null; reviewsCount: number | null } | null>(
+        '/monitoring/reputation/latest',
+      ),
+    ])
+      .then(([campaigns, activations, annual, monitoring, reputation]) => {
+        if (cancelled) return;
+        setCounts({
+          campaigns: campaigns.meta?.totalUnfiltered ?? campaigns.data.length,
+          activations: activations.data.total ?? 0,
+          annualPlans: annual.data.length,
+          measuredMaterials: monitoring.data.materials ?? 0,
+          mentions: reputation.data?.mentionsCount ?? 0,
+          reviews: reputation.data?.reviewsCount ?? 0,
+        });
+        setCountsFailed(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCounts(null);
+        setCountsFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <>
@@ -734,7 +901,14 @@ export function AboutPage() {
         {tab === 'concepts' ? <Concepts /> : null}
         {tab === 'buttons' ? <Buttons /> : null}
         {tab === 'workflow' ? <Workflow /> : null}
-        {tab === 'data' ? <DataTab imports={imports} isAdmin={isAdmin} /> : null}
+        {tab === 'data' ? (
+          <DataTab
+            imports={imports}
+            counts={counts}
+            countsFailed={countsFailed}
+            isAdmin={isAdmin}
+          />
+        ) : null}
         {tab === 'overview' ? <Overview /> : null}
       </main>
     </>

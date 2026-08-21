@@ -496,11 +496,38 @@ final class CampaignImport
                     continue;
                 }
 
-                $existingAsset = Db::one('SELECT id FROM assets WHERE external_key = ?', [$assetKey]);
+                $existingAsset = Db::one(
+                    'SELECT id, storage_path FROM assets WHERE external_key = ?',
+                    [$assetKey],
+                );
 
                 if ($existingAsset !== null) {
                     $assetId = (string) $existingAsset['id'];
-                    $ctx->recordItem('assets', $assetKey, $assetId, ImportContext::UNCHANGED);
+                    $existingKey = (string) ($existingAsset['storage_path'] ?? '');
+
+                    /*
+                     * The row exists — but the file it points at may not.
+                     *
+                     * An import that ran with the wrong `UPLOAD_DIR` writes every
+                     * row and loses every byte. This branch used to record
+                     * UNCHANGED and move on, so the picture could never come
+                     * back: the database promised a path, the disk had nothing,
+                     * and no later import would look. Re-publishing when the file
+                     * is missing is what makes a repeated import the repair it is
+                     * supposed to be.
+                     *
+                     * Published under the *existing* storage key, not the freshly
+                     * staged one: `buildStorageKey()` invents a new name each run,
+                     * so writing there would leave a file nobody references and
+                     * the row still dangling.
+                     */
+                    if ($existingKey !== '' && !Storage::exists($existingKey)) {
+                        Storage::publish($file['temporaryPath'], $existingKey);
+                        $published[] = $existingKey;
+                        $ctx->recordItem('assets', $assetKey, $assetId, ImportContext::UPDATE);
+                    } else {
+                        $ctx->recordItem('assets', $assetKey, $assetId, ImportContext::UNCHANGED);
+                    }
                 } else {
                     $assetId = Ids::newId();
                     Db::execute(

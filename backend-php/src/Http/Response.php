@@ -53,6 +53,23 @@ final class Response
     }
 
     /**
+     * A successful write with nothing to say — `204 No Content`.
+     *
+     * `status(204)` on its own would not do it: that call only records the code,
+     * and the code is sent by whichever emitter runs next. A handler that set it
+     * and then returned sent PHP's default 200 with an empty body, which reads
+     * to a client as a malformed success.
+     */
+    public static function noContent(): void
+    {
+        self::$status = 204;
+        http_response_code(204);
+        foreach (self::$headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
+    }
+
+    /**
      * Sends a file download — used by the campaign export endpoint.
      */
     public static function download(string $filename, string $body, string $type = 'application/json'): void

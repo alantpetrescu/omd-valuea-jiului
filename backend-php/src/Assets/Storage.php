@@ -63,6 +63,22 @@ final class Storage
         return rtrim(str_replace('\\', '/', Env::path('UPLOAD_DIR')), '/');
     }
 
+    /**
+     * Mode for the `YYYY/MM` directories created under `UPLOAD_DIR`.
+     *
+     * `0755`, not `0770`. These sit inside the document root and Apache serves
+     * the files in them straight off disk — which it can only do if it may
+     * traverse into them. Under 0770 the images were written correctly, owned by
+     * the right user, readable at 0644, and completely unreachable: the
+     * directory denied entry, so the request came back 404 while File Manager
+     * showed the file sitting there. Hours were spent looking for a missing
+     * file that was never missing.
+     *
+     * The staging and rate-limit directories stay 0770 on purpose — nothing
+     * serves those over HTTP, and they should not be world-traversable.
+     */
+    private const DIRECTORY_MODE = 0755;
+
     /** Resolves a key inside the root and refuses anything that escapes it. */
     private static function resolve(string $storageKey): string
     {
@@ -116,7 +132,7 @@ final class Storage
     {
         $target = self::resolve($storageKey);
         $directory = dirname($target);
-        if (!is_dir($directory) && !@mkdir($directory, 0770, true) && !is_dir($directory)) {
+        if (!is_dir($directory) && !@mkdir($directory, self::DIRECTORY_MODE, true) && !is_dir($directory)) {
             throw new RuntimeException("Cannot create storage directory: {$directory}");
         }
         if (@file_put_contents($target, $bytes) === false) {
@@ -129,7 +145,7 @@ final class Storage
     {
         $target = self::resolve($storageKey);
         $directory = dirname($target);
-        if (!is_dir($directory) && !@mkdir($directory, 0770, true) && !is_dir($directory)) {
+        if (!is_dir($directory) && !@mkdir($directory, self::DIRECTORY_MODE, true) && !is_dir($directory)) {
             throw new RuntimeException("Cannot create storage directory: {$directory}");
         }
         if (!@rename($temporaryPath, $target)) {

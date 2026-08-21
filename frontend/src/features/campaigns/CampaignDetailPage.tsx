@@ -326,9 +326,17 @@ export function CampaignDetailPage() {
 export function CampaignBlocks({
   campaign,
   activations,
+  onOpenActivation,
 }: {
   campaign: CampaignDetail;
   activations: CampaignActivation[];
+  /**
+   * Opens one of the listed activations, when the host can stack a drawer.
+   *
+   * Optional because the same blocks render on the standalone page, where there
+   * is nothing to stack onto.
+   */
+  onOpenActivation?: (externalKey: string) => void;
 }) {
   const [preview, setPreview] = useState<{ src: string; caption: string } | null>(null);
 
@@ -559,7 +567,7 @@ export function CampaignBlocks({
         <Block number="5" tab="deliverables" title="Livrabile și template-uri">
           {hasFramework ? (
             <>
-              <Section title="5. Livrabile de cadru">
+              <Section title="Livrabile de cadru">
                 <p>{campaign.deliverableIntro}</p>
                 <div className="drawer-table-scroll">
                   <table className="table wide">
@@ -587,7 +595,7 @@ export function CampaignBlocks({
             </>
           ) : (
             <>
-              <Section title="5.1. Headline-uri și texte">
+              <Section title="Headline-uri și texte">
                 <div className="drawer-table-scroll">
                   <table className="table wide">
                     <tbody>
@@ -616,7 +624,7 @@ export function CampaignBlocks({
                 </div>
               </Section>
 
-              <Section title="5.2. Machete digitale editabile">
+              <Section title="Machete digitale editabile">
                 <div className="mockup-list">
                   {campaign.mockups.length ? (
                     campaign.mockups.map((mockup, index) => (
@@ -634,7 +642,7 @@ export function CampaignBlocks({
                 </div>
               </Section>
 
-              <Section title="5.3. Exemple de postări">
+              <Section title="Exemple de postări">
                 {campaign.posts?.length ? (
                   <div className="post-examples">
                     {campaign.posts.map((post, index) => (
@@ -651,7 +659,7 @@ export function CampaignBlocks({
                 )}
               </Section>
 
-              <Section title="5.4. Concepte / scenarii video">
+              <Section title="Concepte / scenarii video">
                 <div className="drawer-table-scroll">
                   <table className="table wide">
                     <tbody>
@@ -736,7 +744,21 @@ export function CampaignBlocks({
                   activations.map((activation) => (
                     <tr key={activation.id}>
                       <td>
-                        <strong>{activation.title}</strong>
+                        {/* Clickable only where there is somewhere to open it.
+                            The standalone page has no drawer stack, so there it
+                            stays plain text rather than a button that would have
+                            to navigate away. */}
+                        {onOpenActivation ? (
+                          <button
+                            type="button"
+                            className="activation-title-link"
+                            onClick={() => onOpenActivation(activation.id)}
+                          >
+                            {activation.title}
+                          </button>
+                        ) : (
+                          <strong>{activation.title}</strong>
+                        )}
                       </td>
                       <td>
                         {activation.startDate ?? '—'} – {activation.endDate ?? '—'}

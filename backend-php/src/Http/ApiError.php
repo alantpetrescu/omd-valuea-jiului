@@ -26,6 +26,13 @@ final class ApiError extends RuntimeException
         'STALE_VERSION' => 409,
         'ENTITY_IN_USE' => 409,
         'SYSTEM_VALUE_PROTECTED' => 409,
+        // A strategic code that is already load-bearing: referenced by a
+        // campaign, or brought in by an import that will look for it again.
+        'CODE_LOCKED' => 409,
+        // The one ACTIVE strategy version cannot be deleted or archived. The
+        // invariant is kept by activating another version, not by emptying the
+        // position.
+        'VERSION_ACTIVE' => 409,
         'PAYLOAD_TOO_LARGE' => 413,
         'VALIDATION_ERROR' => 422,
         'INTERNAL_ERROR' => 500,

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:parity": "bash tests/visual-parity/run.sh"
+    "test:parity": "bash tests/visual-parity/run.sh",
+    "test:admin-strategy": "bash tests/admin-strategy/run.sh"
   },
   "dependencies": {
     "react": "^18.3.1",

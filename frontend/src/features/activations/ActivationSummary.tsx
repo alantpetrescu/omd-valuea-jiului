@@ -13,6 +13,8 @@
  * Budget balance and calendar situation are computed for display and never
  * persisted (spec 27).
  */
+import { useEffect, useRef } from 'react';
+
 import {
   calculateEngagementRate,
   formatDate,
@@ -279,9 +281,20 @@ function CustomTab({ activation }: { activation: ActivationDetail }) {
 
 /* ------------------------------------------------------------- Materiale */
 
-function MaterialView({ material }: { material: ActivationMaterial }) {
+function MaterialView({
+  material,
+  focused = false,
+}: {
+  material: ActivationMaterial;
+  /** Arrived here from a Monitorizare row that named this material. */
+  focused?: boolean;
+}) {
   return (
-    <article className="activation-material-view" data-activation-material-id={material.id}>
+    <article
+      className={`activation-material-view${focused ? ' material-focus' : ''}`}
+      data-activation-material-id={material.id}
+      aria-current={focused ? 'true' : undefined}
+    >
       <header>
         <div>
           <small>
@@ -355,12 +368,50 @@ function MaterialView({ material }: { material: ActivationMaterial }) {
   );
 }
 
-function MaterialsTab({ activation }: { activation: ActivationDetail }) {
+function MaterialsTab({
+  activation,
+  focusMaterialId = null,
+}: {
+  activation: ActivationDetail;
+  focusMaterialId?: string | null;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Bring the named material into view, as the prototype's
+   * `focusViewedMaterial()` does.
+   *
+   * An activation can carry a dozen materials, so landing on the right tab is
+   * only half the answer — you would still be hunting the list for the card the
+   * Monitorizare row was about. The marker alone is not enough either when the
+   * card sits below the fold.
+   *
+   * The cards are a fixed 160px-tall visual over text, so nothing reflows after
+   * a late image load and the scroll target stays where it was measured.
+   *
+   * Instant rather than the prototype's `behavior: 'smooth'`. A smooth scroll is
+   * animated, so it needs frames to run — measured here landing at 0 instead of
+   * 643 when the page was not painting. There is nothing to animate away from
+   * either: the drawer has only just slid in, so the reader has no position in
+   * this list to be carried from. Arriving already at the card is the point.
+   */
+  useEffect(() => {
+    if (!focusMaterialId) return;
+    const target = listRef.current?.querySelector(
+      `[data-activation-material-id="${CSS.escape(focusMaterialId)}"]`,
+    );
+    target?.scrollIntoView({ block: 'center' });
+  }, [focusMaterialId, activation.id]);
+
   return (
-    <div className="activation-material-list">
+    <div className="activation-material-list" ref={listRef}>
       {activation.materials.length ? (
         activation.materials.map((material) => (
-          <MaterialView key={material.id} material={material} />
+          <MaterialView
+            key={material.id}
+            material={material}
+            focused={material.id === focusMaterialId}
+          />
         ))
       ) : (
         <div className="empty-detail">Nu există materiale asociate.</div>
@@ -590,15 +641,20 @@ export function ActivationSummary({
   results,
   onRefreshResults,
   refreshingResults = false,
+  focusMaterialId = null,
 }: {
   activation: ActivationDetail;
   tab: ActivationTab;
   results: Map<string, MaterialResult>;
   onRefreshResults: () => void;
   refreshingResults?: boolean;
+  /** Material to single out on the "Materiale și canale" tab, if any. */
+  focusMaterialId?: string | null;
 }) {
   if (tab === 'custom') return <CustomTab activation={activation} />;
-  if (tab === 'materials') return <MaterialsTab activation={activation} />;
+  if (tab === 'materials') {
+    return <MaterialsTab activation={activation} focusMaterialId={focusMaterialId} />;
+  }
   if (tab === 'results') {
     return (
       <ResultsTab

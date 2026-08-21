@@ -36,6 +36,8 @@ export function ActivationDrawer({
   onClose,
   onOpenCampaign,
   escapeEnabled = true,
+  initialTab = 'plan',
+  focusMaterialId = null,
 }: {
   externalKey: string;
   onClose: () => void;
@@ -49,6 +51,16 @@ export function ActivationDrawer({
    * activation underneath it too.
    */
   escapeEnabled?: boolean;
+  /**
+   * Which tab to land on — the prototype's `openView(id, initialTab)`.
+   *
+   * Monitorizare opens a fiche because of one material, so it asks for
+   * "Materiale și canale" rather than dropping you on Planificare to find your
+   * own way there.
+   */
+  initialTab?: ActivationTab;
+  /** Material to single out and scroll to on that tab. */
+  focusMaterialId?: string | null;
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -57,7 +69,7 @@ export function ActivationDrawer({
   const [activation, setActivation] = useState<ActivationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<ActivationTab>('plan');
+  const [tab, setTab] = useState<ActivationTab>(initialTab);
   const closeRef = useRef<HTMLButtonElement>(null);
   const { results, refreshing, refresh } = useMaterialResults(externalKey);
 
@@ -88,24 +100,43 @@ export function ActivationDrawer({
   }, [externalKey]);
 
   /*
-   * Escape closes, and the page behind stops scrolling while the drawer is up.
-   * Without the scroll lock the calendar drifts under the overlay when the
-   * wheel is used, which reads as the page having broken.
+   * The page behind stops scrolling while the drawer is up — otherwise the
+   * calendar drifts under the overlay when the wheel is used, which reads as the
+   * page having broken.
+   *
+   * Deliberately its own effect, with no dependencies: it belongs to this drawer
+   * existing, not to any prop. Sharing it with the Escape handler below meant
+   * re-running on every `escapeEnabled` change, and each re-run saved the
+   * already-locked value as the one to restore — leaving the page frozen after
+   * the last drawer closed.
    */
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  /*
+   * Re-open on a different row, start from the tab that row asked for.
+   *
+   * The drawer is not always remounted between opens — the campaign drawer
+   * swaps `externalKey` under a live one — so without this it would keep
+   * whichever tab happened to be clicked last, and a Monitorizare row asking
+   * for its material would land somewhere else entirely.
+   */
+  useEffect(() => {
+    setTab(initialTab);
+  }, [externalKey, initialTab]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && escapeEnabled) onClose();
     };
     document.addEventListener('keydown', onKey);
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
-
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [onClose, escapeEnabled]);
 
   const situation = activation ? getTemporalSituation(activation) : null;
@@ -155,9 +186,8 @@ export function ActivationDrawer({
           ) : null}
         </header>
 
-        {/* The second row of `.drawer`'s grid. Opening on a different activation
-            resets to the first tab, which is why the key is on the nav. */}
-        <nav className="tabs" key={externalKey}>
+        {/* The second row of `.drawer`'s grid. */}
+        <nav className="tabs">
           {ACTIVATION_TABS.map(([id, label]) => (
             <button
               key={id}
@@ -177,13 +207,16 @@ export function ActivationDrawer({
               {error}
             </div>
           ) : null}
-          {activation ? <ActivationSummary
-          activation={activation}
-          tab={tab}
-          results={results}
-          onRefreshResults={refresh}
-          refreshingResults={refreshing}
-        /> : null}
+          {activation ? (
+            <ActivationSummary
+              activation={activation}
+              tab={tab}
+              results={results}
+              onRefreshResults={refresh}
+              refreshingResults={refreshing}
+              focusMaterialId={focusMaterialId}
+            />
+          ) : null}
         </div>
 
         <footer className="drawer-foot">

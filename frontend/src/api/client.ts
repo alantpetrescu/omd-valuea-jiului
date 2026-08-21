@@ -65,7 +65,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<{ data:
     throw new ApiError('NETWORK_ERROR', 'Serverul nu poate fi contactat. Verifică conexiunea.', 0);
   }
 
-  const payload = await response.json().catch(() => null);
+  /*
+   * `204 No Content` has no body by definition, and `json()` on one rejects.
+   * A successful delete would otherwise arrive here as `null` and blow up at
+   * `response.data` in the caller — a working request reported as a crash.
+   */
+  const payload =
+    response.status === 204 ? { data: undefined } : await response.json().catch(() => null);
 
   if (!response.ok) {
     const error = (payload as { error?: { code?: string; message?: string; details?: unknown } })?.error;

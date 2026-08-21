@@ -18,7 +18,9 @@ declare(strict_types=1);
 namespace Omd\Support;
 
 use Omd\Config\Env;
+use Omd\Assets\Storage;
 use Omd\Database\Db;
+use Omd\Database\Dialect;
 use Throwable;
 
 final class Preflight
@@ -83,7 +85,11 @@ final class Preflight
 
         foreach ([
             'Contracte JSON' => Env::contractsDir(),
-            'Migrații' => Env::migrationsDir(),
+            // Labelled as the source, not just "Migrații": on MariaDB the set
+            // that actually runs is generated from this one, and `Set de
+            // migrații` below names it. Two rows pointing at different folders
+            // read as a contradiction otherwise.
+            'Migrații (sursă)' => Env::migrationsDir(),
         ] as $label => $directory) {
             $exists = is_dir($directory) && is_readable($directory);
             $count = $exists ? count(glob($directory . '/*.*') ?: []) : 0;
@@ -126,7 +132,11 @@ final class Preflight
             'Director import-temp' => Env::path('IMPORT_TEMP_DIR'),
         ] as $label => $directory) {
             if (!is_dir($directory)) {
-                @mkdir($directory, 0770, true);
+                // `UPLOAD_DIR` is served by Apache, so it needs traversal for
+                // others; `IMPORT_TEMP_DIR` does not, but one mode for both here
+                // is simpler than a special case, and 0755 leaks nothing that a
+                // web server was not already going to read.
+                @mkdir($directory, 0755, true);
             }
             $writable = is_dir($directory) && is_writable($directory);
             $add(
@@ -136,14 +146,75 @@ final class Preflight
             );
         }
 
+        /*
+         * Is UPLOAD_DIR actually reachable from the web?
+         *
+         * The application writes images there and hands the browser
+         * `/uploads/<key>` URLs, which Apache resolves against the document
+         * root. If the two are different directories, every write succeeds,
+         * every check passes, and every picture 404s — with nothing anywhere
+         * saying why. That is not hypothetical: on an addon domain the document
+         * root is not `public_html`, and `UPLOAD_DIR` copied from another
+         * install points at the wrong tree.
+         *
+         * Only meaningful under a web SAPI; the CLI has no document root.
+         */
+        $documentRoot = rtrim(str_replace('\\', '/', (string) ($_SERVER['DOCUMENT_ROOT'] ?? '')), '/');
+        if ($documentRoot !== '') {
+            $uploads = rtrim(str_replace('\\', '/', Env::path('UPLOAD_DIR')), '/');
+            $reachable = $uploads === $documentRoot || str_starts_with($uploads, $documentRoot . '/');
+
+            $add(
+                'Uploads accesibile din web',
+                $reachable ? self::OK : self::FAIL,
+                $reachable
+                    ? '/' . ltrim(substr($uploads, strlen($documentRoot)), '/') . ' — sub document root'
+                    : sprintf(
+                        'UPLOAD_DIR este %s, dar document root-ul e %s. Imaginile se scriu unde nu le poate servi Apache.',
+                        $uploads,
+                        $documentRoot,
+                    ),
+            );
+        }
+
         // --- Database -----------------------------------------------------
         try {
             $version = (string) Db::scalar('SELECT VERSION()');
-            $modern = version_compare($version, '8.0', '>=');
+
+            /*
+             * MariaDB has to be named, not version-compared.
+             *
+             * It reports `10.11.6-MariaDB` or `11.4.2-MariaDB`, and
+             * `version_compare('10.11.6-MariaDB', '8.0', '>=')` is true — 10 is
+             * greater than 8. The check therefore said OK on a server that has
+             * none of the MySQL 8 collations, and the deployment failed two
+             * steps later, at the first `CREATE TABLE`, with nothing here having
+             * warned about it.
+             */
+            $isMariaDb = Dialect::isMariaDbBanner($version);
+            $supported = $isMariaDb || version_compare($version, '8.0', '>=');
+
             $add(
-                'Conexiune MySQL',
-                $modern ? self::OK : self::FAIL,
-                $version . ($modern ? '' : ' — schema cere 8.0+ pentru utf8mb4_0900_ai_ci'),
+                'Conexiune ' . ($isMariaDb ? 'MariaDB' : 'MySQL'),
+                $supported ? self::OK : self::FAIL,
+                $version . ($supported ? '' : ' — schema cere MySQL 8.0+ sau MariaDB'),
+            );
+
+            /*
+             * Which migration set will run, said out loud.
+             *
+             * The two differ only in collation, but a deployment that reads the
+             * wrong one fails at the first `CREATE TABLE` with a message about
+             * collations — which sounds cosmetic and is not. Naming the folder
+             * here turns that into something you can check before running it.
+             */
+            $set = Dialect::migrationsDir();
+            $add(
+                'Set de migrații',
+                is_dir($set) ? self::OK : self::FAIL,
+                is_dir($set)
+                    ? basename($set) . ' — colație ' . Dialect::collation()
+                    : basename($set) . ' lipsește — rulează php bin/generate-mariadb-migrations.php',
             );
 
             $collation = (string) Db::scalar(
@@ -152,9 +223,42 @@ final class Preflight
             );
             $add(
                 'Colație bază de date',
-                $collation === 'utf8mb4_0900_ai_ci' ? self::OK : self::WARN,
+                $collation === Dialect::collation() ? self::OK : self::WARN,
                 $collation === '' ? 'necunoscută' : $collation,
             );
+
+            /*
+             * Do the rows and the files agree?
+             *
+             * `assets.storage_path` is a promise that a file exists. An import
+             * that ran with the wrong `UPLOAD_DIR` writes every row and loses
+             * every byte, and nothing downstream notices: the API keeps handing
+             * out `/uploads/...` URLs, the browser keeps getting 404s, and the
+             * only symptom is missing pictures. Counting them here turns that
+             * into a number.
+             */
+            $assetPaths = Db::rows('SELECT storage_path FROM assets');
+            if ($assetPaths !== []) {
+                $missing = 0;
+                foreach ($assetPaths as $asset) {
+                    $key = (string) ($asset['storage_path'] ?? '');
+                    if ($key === '' || !Storage::exists($key)) {
+                        $missing++;
+                    }
+                }
+
+                $add(
+                    'Vizuale pe disc',
+                    $missing === 0 ? self::OK : self::FAIL,
+                    $missing === 0
+                        ? count($assetPaths) . ' din ' . count($assetPaths) . ' prezente'
+                        : sprintf(
+                            '%d din %d lipsesc — rulează ?action=import; verifică întâi UPLOAD_DIR',
+                            $missing,
+                            count($assetPaths),
+                        ),
+                );
+            }
 
             $hasTracking = Db::count(
                 'SELECT COUNT(*) FROM information_schema.TABLES

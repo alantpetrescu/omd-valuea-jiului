@@ -8,9 +8,10 @@
  * "Situația în calendar" is computed at display time from status + dates — it
  * is derived data and is never stored (spec section 27).
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { api } from '../../api/client';
 import {
   formatDateTime,
   formatMoney,
@@ -90,10 +91,14 @@ function RowActions({
   item,
   canEdit,
   onOpen,
+  onRefreshResults,
+  refreshing,
 }: {
   item: ActivationListItem;
   canEdit: boolean;
   onOpen: (item: ActivationListItem) => void;
+  onRefreshResults: (item: ActivationListItem) => void;
+  refreshing: boolean;
 }) {
   const navigate = useNavigate();
 
@@ -124,25 +129,28 @@ function RowActions({
       ) : null}
 
       {/*
-        "Refresh social results", the prototype's third icon and its `.results`
-        filled treatment.
+        "Actualizează rezultate sociale", the prototype's third icon and its
+        `.results` filled treatment.
 
         The prototype's handler calls `simulateResults()` — it invents metrics.
         That cannot be ported: this application's results come from an
         OMD_ACTIVATION_MONITORING_PACKAGE import, and writing made-up numbers
         into a real database would be fabricating measurements.
 
-        So the button goes where the real results are: the monitoring screen,
-        filtered to this activation. Same icon, same place, and an action that
-        tells the truth about where the numbers come from.
+        What it does instead is a real refresh: re-read the measurements stored
+        for this activation, then reload the row so the "Rezultate" cell and its
+        timestamp are back in step with them. Same icon, same place, and it
+        leaves you on the page you were reading.
       */}
       <button
         type="button"
-        className="activation-icon-btn results"
-        data-tooltip="Rezultate social"
-        title="Vezi rezultatele pe postări și canale social"
-        aria-label={`Vezi rezultatele social pentru ${item.title}`}
-        onClick={() => navigate(`/monitoring-activations?activation=${encodeURIComponent(item.id)}`)}
+        className={`activation-icon-btn results${refreshing ? ' busy' : ''}`}
+        data-tooltip="Actualizează rezultate sociale"
+        title="Actualizează rezultate sociale"
+        aria-label={`Actualizează rezultatele sociale pentru ${item.title}`}
+        aria-busy={refreshing}
+        disabled={refreshing}
+        onClick={() => onRefreshResults(item)}
       >
         {ICON_REFRESH}
       </button>
@@ -155,11 +163,15 @@ function ActivationRow({
   canEdit,
   onOpen,
   onOpenCampaign,
+  onRefreshResults,
+  refreshing,
 }: {
   item: ActivationListItem;
   canEdit: boolean;
   onOpen: (item: ActivationListItem) => void;
   onOpenCampaign: (campaignKey: string) => void;
+  onRefreshResults: (item: ActivationListItem) => void;
+  refreshing: boolean;
 }) {
   const situation = getTemporalSituation(item);
 
@@ -244,7 +256,13 @@ function ActivationRow({
       </td>
 
       <td>
-        <RowActions item={item} canEdit={canEdit} onOpen={onOpen} />
+        <RowActions
+          item={item}
+          canEdit={canEdit}
+          onOpen={onOpen}
+          onRefreshResults={onRefreshResults}
+          refreshing={refreshing}
+        />
       </td>
     </tr>
   );
@@ -276,6 +294,61 @@ export function ActivationsPage() {
    * glance at the campaign and come back to where you were.
    */
   const [openCampaignKey, setOpenCampaignKey] = useState<string | null>(null);
+
+  /*
+   * Which row is re-reading its social results, and what the last attempt found.
+   *
+   * Nothing here contacts a social platform — the measurements arrive through a
+   * monitoring import. "Actualizează" therefore means: read what is stored now
+   * and put the row back in step with it. Saying how many materials were found,
+   * and when they were last measured, is what makes the difference between a
+   * refresh that worked and one that had nothing to find.
+   */
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [resultsNote, setResultsNote] = useState<string | null>(null);
+
+  const refreshResults = useCallback(
+    async (item: ActivationListItem) => {
+      setRefreshingId(item.id);
+      setResultsNote(null);
+
+      try {
+        const response = await api.get<{ observedAt: string | null }[]>(
+          `/monitoring/activations/latest?activation=${encodeURIComponent(item.id)}&pageSize=200`,
+        );
+        const rows = response.data;
+
+        // Reload before reporting: the "Rezultate" cell reads `lastResultsAt`
+        // from the list, so the note and the row it describes must not disagree.
+        // Quietly, so the table stays put and the spinning icon stays visible.
+        await reload({ quiet: true });
+
+        if (rows.length === 0) {
+          setResultsNote(
+            `„${item.title}”: nicio măsurătoare stocată. Rezultatele sociale intră printr-un import de monitorizare.`,
+          );
+          return;
+        }
+
+        const observed = rows
+          .map((row) => row.observedAt)
+          .filter((value): value is string => Boolean(value))
+          .sort();
+        const last = observed[observed.length - 1];
+
+        setResultsNote(
+          `„${item.title}”: ${rows.length} ${
+            rows.length === 1 ? 'material măsurat' : 'materiale măsurate'
+          }${last ? `, ultima măsurătoare ${formatDateTime(last)}` : ''}.`,
+        );
+      } catch {
+        setResultsNote(`Rezultatele pentru „${item.title}” nu au putut fi actualizate.`);
+      } finally {
+        setRefreshingId(null);
+      }
+    },
+    [reload],
+  );
 
   const years = useMemo(() => {
     const set = new Set<number>([2026, 2027, 2028]);
@@ -464,6 +537,11 @@ export function ActivationsPage() {
           {error}
         </div>
       ) : null}
+      {resultsNote ? (
+        <div className="state-note" role="status">
+          {resultsNote}
+        </div>
+      ) : null}
       {!loading && !error && items.length === 0 ? (
         <section className="activation-empty">
           <div>▶</div>
@@ -519,6 +597,8 @@ export function ActivationsPage() {
                     canEdit={canEdit}
                     onOpen={(row) => setOpenKey(row.id)}
                     onOpenCampaign={setOpenCampaignKey}
+                    onRefreshResults={refreshResults}
+                    refreshing={refreshingId === item.id}
                   />
                 ))}
               </tbody>

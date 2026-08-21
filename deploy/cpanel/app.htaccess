@@ -24,13 +24,28 @@ RewriteRule ^ index.html [L]
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
 
-  # The hashed asset filenames change on every build, so they can be cached
-  # hard. index.html must not be, or a deploy would not reach anyone.
-  <FilesMatch "\.(js|css|woff2)$">
+  # Caching, ordered so the specific rule wins.
+  #
+  # The first version matched every .js, .css and .woff2 and marked them all
+  # immutable for a year. That is right for hashed build output, whose filename
+  # changes whenever the content does — and wrong for anything whose name is
+  # stable. fonts.css sits in public/, so it keeps its name across deploys: once
+  # a browser had it, immutable meant it would never ask for it again, and a fix
+  # to it could not reach anyone. That is exactly what happened.
+
+  # Default for files that keep their name from one deploy to the next.
+  <FilesMatch "\.(html|css|js)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+
+  # Hashed build output overrides it: `index-DFrcpxsr.css` and friends.
+  <FilesMatch "-[A-Za-z0-9_-]{8,}\.(js|css)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
-  <FilesMatch "\.html$">
-    Header set Cache-Control "no-cache"
+
+  # A given .woff2 is never edited, only added or removed.
+  <FilesMatch "\.woff2$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
 </IfModule>
 

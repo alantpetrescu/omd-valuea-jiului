@@ -1,0 +1,118 @@
+-- GENERAT AUTOMAT — nu edita acest fișier.
+--
+-- Sursa: database/migrations/009_monitoring.sql
+-- Comanda: php bin/generate-mariadb-migrations.php
+--
+-- Singura diferență față de sursă este colația: MySQL 8 folosește
+-- `utf8mb4_0900_ai_ci`, care nu există în MariaDB. Echivalentul cel mai apropiat
+-- disponibil acolo este `utf8mb4_unicode_520_nopad_ci` — aceeași insensibilitate la diacritice
+-- și la majuscule, același tratament NO PAD al spațiilor finale.
+--
+-- Motivul alegerii e explicat în src/Database/Dialect.php.
+
+-- OMD Valea Jiului migration: Performance and reputation snapshots
+-- Generated verbatim from 02_DATABASE/MYSQL_SCHEMA_BLUEPRINT.sql
+-- (sha256 d76b645f05c47707e9edba44cf922dad36b95341ea2b22ea59969c3f402978f4).
+-- Do not edit in place: schema changes go into a new numbered migration.
+
+CREATE TABLE material_performance_snapshots (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  external_key VARCHAR(191) NOT NULL,
+  activation_id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  material_id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  channel_code VARCHAR(64) NOT NULL,
+  platform_external_id VARCHAR(191) NULL,
+  measurement_type VARCHAR(32) NOT NULL,
+  observed_at DATETIME(6) NOT NULL,
+  provider_code VARCHAR(64) NOT NULL,
+  provider_label VARCHAR(255) NOT NULL,
+  provider_record_id VARCHAR(191) NULL,
+  currency CHAR(3) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  impressions BIGINT UNSIGNED NULL,
+  reach BIGINT UNSIGNED NULL,
+  views BIGINT UNSIGNED NULL,
+  reactions BIGINT UNSIGNED NULL,
+  comments BIGINT UNSIGNED NULL,
+  shares BIGINT UNSIGNED NULL,
+  saves BIGINT UNSIGNED NULL,
+  clicks BIGINT UNSIGNED NULL,
+  spend DECIMAL(15,2) NULL,
+  import_batch_id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_performance_snapshots_external_key (external_key),
+  KEY idx_performance_material_time (material_id, observed_at),
+  KEY idx_performance_activation_time (activation_id, observed_at),
+  KEY idx_performance_channel_time (channel_code, observed_at),
+  KEY idx_performance_import (import_batch_id),
+  CONSTRAINT fk_performance_activation FOREIGN KEY (activation_id) REFERENCES activations(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_performance_material FOREIGN KEY (material_id) REFERENCES activation_materials(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_performance_channel_code FOREIGN KEY (channel_code) REFERENCES activation_channels(code) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_performance_import FOREIGN KEY (import_batch_id) REFERENCES import_batches(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_performance_measurement_type CHECK (measurement_type IN ('CUMULATIVE_SNAPSHOT','PERIOD_TOTAL')),
+  CONSTRAINT chk_performance_spend CHECK (spend IS NULL OR spend >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_nopad_ci;
+
+CREATE TABLE reputation_snapshots (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  external_key VARCHAR(191) NOT NULL,
+  scope_type VARCHAR(32) NOT NULL,
+  scope_external_key VARCHAR(191) NOT NULL,
+  scope_label VARCHAR(500) NOT NULL,
+  observed_at DATETIME(6) NOT NULL,
+  provider_code VARCHAR(64) NOT NULL,
+  provider_label VARCHAR(255) NOT NULL,
+  provider_record_id VARCHAR(191) NULL,
+  mentions_count BIGINT UNSIGNED NULL,
+  reviews_count BIGINT UNSIGNED NULL,
+  average_rating DECIMAL(4,2) NULL,
+  positive_share_pct DECIMAL(6,3) NULL,
+  neutral_share_pct DECIMAL(6,3) NULL,
+  negative_share_pct DECIMAL(6,3) NULL,
+  sentiment_analyzed_count BIGINT UNSIGNED NULL,
+  import_batch_id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_reputation_snapshots_external_key (external_key),
+  KEY idx_reputation_scope_time (scope_type, scope_external_key, observed_at),
+  KEY idx_reputation_import (import_batch_id),
+  CONSTRAINT fk_reputation_import FOREIGN KEY (import_batch_id) REFERENCES import_batches(id) ON DELETE SET NULL ON UPDATE RESTRICT,
+  CONSTRAINT chk_reputation_scope CHECK (scope_type IN ('DESTINATION','UAT','CUSTOM')),
+  CONSTRAINT chk_reputation_rating CHECK (average_rating IS NULL OR (average_rating >= 0 AND average_rating <= 5)),
+  CONSTRAINT chk_reputation_positive CHECK (positive_share_pct IS NULL OR (positive_share_pct >= 0 AND positive_share_pct <= 100)),
+  CONSTRAINT chk_reputation_neutral CHECK (neutral_share_pct IS NULL OR (neutral_share_pct >= 0 AND neutral_share_pct <= 100)),
+  CONSTRAINT chk_reputation_negative CHECK (negative_share_pct IS NULL OR (negative_share_pct >= 0 AND negative_share_pct <= 100))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_nopad_ci;
+
+CREATE TABLE reputation_theme_metrics (
+  reputation_snapshot_id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(191) NOT NULL,
+  label VARCHAR(500) NOT NULL,
+  mentions_count BIGINT UNSIGNED NULL,
+  share_pct DECIMAL(6,3) NULL,
+  score DECIMAL(15,4) NULL,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (reputation_snapshot_id, code),
+  CONSTRAINT fk_reputation_theme_snapshot FOREIGN KEY (reputation_snapshot_id) REFERENCES reputation_snapshots(id) ON DELETE CASCADE ON UPDATE RESTRICT,
+  CONSTRAINT chk_reputation_theme_share CHECK (share_pct IS NULL OR (share_pct >= 0 AND share_pct <= 100)),
+  CONSTRAINT chk_reputation_theme_score CHECK (score IS NULL OR score >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_nopad_ci;
+
+CREATE TABLE reputation_source_metrics (
+  reputation_snapshot_id CHAR(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  code VARCHAR(191) NOT NULL,
+  label VARCHAR(500) NOT NULL,
+  mentions_count BIGINT UNSIGNED NULL,
+  share_pct DECIMAL(6,3) NULL,
+  reviews_count BIGINT UNSIGNED NULL,
+  average_rating DECIMAL(4,2) NULL,
+  positive_share_pct DECIMAL(6,3) NULL,
+  sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (reputation_snapshot_id, code),
+  CONSTRAINT fk_reputation_source_snapshot FOREIGN KEY (reputation_snapshot_id) REFERENCES reputation_snapshots(id) ON DELETE CASCADE ON UPDATE RESTRICT,
+  CONSTRAINT chk_reputation_source_share CHECK (share_pct IS NULL OR (share_pct >= 0 AND share_pct <= 100)),
+  CONSTRAINT chk_reputation_source_rating CHECK (average_rating IS NULL OR (average_rating >= 0 AND average_rating <= 5)),
+  CONSTRAINT chk_reputation_source_positive CHECK (positive_share_pct IS NULL OR (positive_share_pct >= 0 AND positive_share_pct <= 100))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_nopad_ci;

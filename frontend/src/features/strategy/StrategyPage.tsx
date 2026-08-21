@@ -17,9 +17,9 @@
  * produse, KPI — is edited on the campaign fiche that declares it.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { api, ApiError } from '../../api/client';
+import { CampaignDrawer } from '../campaigns/CampaignDrawer';
 import {
   buildModel,
   campaignLabel,
@@ -61,7 +61,16 @@ const VIEWS: Array<[View, string, string]> = [
 ];
 
 export function StrategyPage() {
-  const navigate = useNavigate();
+  /*
+   * The campaign opens over this page, not instead of it.
+   *
+   * "Deschide campania" used to navigate to `/campaigns/:key`, which threw away
+   * everything that had been set up to reach that button — the tab, the Fișă
+   * view, the chosen reper, the scroll position — and closing the campaign left
+   * you on the Campanii list rather than back where you were. A drawer keeps the
+   * URL and the page underneath, which is what every other screen already does.
+   */
+  const [openCampaign, setOpenCampaign] = useState<string | null>(null);
 
   const [payload, setPayload] = useState<StrategyPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -215,7 +224,7 @@ export function StrategyPage() {
           audienceKind={audienceKind}
           selected={selected}
           onOpenEntity={openEntity}
-          onOpenCampaign={(id) => navigate(`/campaigns/${id}`)}
+          onOpenCampaign={setOpenCampaign}
           onJump={jump}
           onSelect={setSelected}
           onProgramKind={(kind) => {
@@ -239,6 +248,10 @@ export function StrategyPage() {
         <div className="toastbox">
           <div className="toast">{toast}</div>
         </div>
+      ) : null}
+
+      {openCampaign ? (
+        <CampaignDrawer externalKey={openCampaign} onClose={() => setOpenCampaign(null)} />
       ) : null}
     </>
   );

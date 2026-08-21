@@ -35,6 +35,7 @@ import {
 } from '../../domain/services';
 import { useCatalogs } from '../campaigns/useCampaigns';
 import { ActivationDrawer } from '../activations/ActivationDrawer';
+import type { ActivationTab } from '../activations/ActivationSummary';
 import { CampaignDrawer } from '../campaigns/CampaignDrawer';
 
 interface SnapshotRow {
@@ -299,16 +300,32 @@ export function MonitoringActivationsPage() {
     'engagementRate',
   );
   const [expandedChannel, setExpandedChannel] = useState<string | null>(null);
-  const [openActivation, setOpenActivation] = useState<string | null>(null);
+  /*
+   * The fiche the drawer is showing, and the material it was opened for.
+   *
+   * Every route into this drawer from Monitorizare starts at a material — a
+   * drill-down row, a Top materiale title, its arrow. Carrying that id lets the
+   * drawer land on "Materiale și canale" with the right card marked, which is
+   * what the prototype's `openView(id, 'materials', materialId)` does.
+   *
+   * The tab travels with it because every control here opens the fiche for a
+   * reason, and the reason is on the button: an activation row says "Deschide
+   * KPI și rezultate", so that is the tab it owes you.
+   */
+  const [openActivation, setOpenActivation] = useState<{
+    id: string;
+    tab: ActivationTab;
+    materialId: string | null;
+  } | null>(null);
   const [openCampaign, setOpenCampaign] = useState<string | null>(null);
 
   const catalogs = useCatalogs();
 
   /*
-   * `?activation=` narrows the page to one activation. The row-action icon on
-   * Activări links here, so the link has to arrive somewhere useful. Read from
-   * the URL rather than held in state, so the view is shareable and survives a
-   * reload.
+   * `?activation=` narrows the page to one activation. Read from the URL rather
+   * than held in state, so the view is shareable and survives a reload — which
+   * is now its only job: the row action on Activări that used to link here
+   * refreshes results in place instead.
    */
   const [searchParams, setSearchParams] = useSearchParams();
   const activationFilter = searchParams.get('activation') ?? '';
@@ -838,10 +855,35 @@ export function MonitoringActivationsPage() {
                             for (const row of group.rows) {
                               const m = aggregate([row]);
                               rowsOut.push(
-                                <tr className="channel-drill" key={`${group.code}-${row.materialId}`}>
-                                  <td>
-                                    <strong>{row.materialTitle}</strong>
-                                    <small>{row.activationTitle}</small>
+                                <tr
+                                  className="channel-material-drill-row"
+                                  key={`${group.code}-${row.materialId}`}
+                                >
+                                  {/* A material here opens the same way its Top
+                                      materiale row does — the prototype makes
+                                      this title a `monitoring-material-link`
+                                      too. `channel-drill` was a class of my own
+                                      invention with no rule behind it, so these
+                                      rows also had none of the indent, rail or
+                                      hover the stylesheet ships. */}
+                                  <td className="channel-material-cell">
+                                    <button
+                                      type="button"
+                                      className="monitoring-material-link"
+                                      title="Click pentru a deschide materialul în activare"
+                                      onClick={() =>
+                                        setOpenActivation({
+                                          id: row.activationId,
+                                          tab: 'materials',
+                                          materialId: row.materialId,
+                                        })
+                                      }
+                                    >
+                                      {row.materialTitle || 'Material'}
+                                    </button>
+                                    <div className="channel-material-meta">
+                                      <small>Activare: {row.activationTitle}</small>
+                                    </div>
                                   </td>
                                   <td className="num">1</td>
                                   <td className="num">{formatNumber(m.impressions)}</td>
@@ -940,7 +982,7 @@ export function MonitoringActivationsPage() {
                                   data-tooltip="Deschide KPI și rezultate"
                                   title="Deschide KPI și rezultate"
                                   aria-label={`Deschide KPI și rezultate pentru ${group.title}`}
-                                  onClick={() => setOpenActivation(group.id)}
+                                  onClick={() => setOpenActivation({ id: group.id, tab: 'results', materialId: null })}
                                 >
                                   <svg viewBox="0 0 24 24" aria-hidden="true">
                                     <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
@@ -1011,7 +1053,14 @@ export function MonitoringActivationsPage() {
                               <button
                                 type="button"
                                 className="monitoring-material-link"
-                                onClick={() => setOpenActivation(row.activationId)}
+                                title="Click pentru a deschide materialul în activare"
+                                onClick={() =>
+                                  setOpenActivation({
+                                    id: row.activationId,
+                                    tab: 'materials',
+                                    materialId: row.materialId,
+                                  })
+                                }
                               >
                                 {row.materialTitle || 'Material'}
                               </button>
@@ -1031,8 +1080,16 @@ export function MonitoringActivationsPage() {
                                 className="activation-icon-btn"
                                 data-tooltip="Deschide materialul"
                                 title="Deschide materialul"
-                                aria-label={`Deschide activarea ${row.activationTitle}`}
-                                onClick={() => setOpenActivation(row.activationId)}
+                                aria-label={`Deschide materialul ${
+                                  row.materialTitle || 'fără titlu'
+                                } în activarea ${row.activationTitle}`}
+                                onClick={() =>
+                                  setOpenActivation({
+                                    id: row.activationId,
+                                    tab: 'materials',
+                                    materialId: row.materialId,
+                                  })
+                                }
                               >
                                 <svg viewBox="0 0 24 24" aria-hidden="true">
                                   <path d="M5 12h14" />
@@ -1059,10 +1116,12 @@ export function MonitoringActivationsPage() {
 
       {openActivation ? (
         <ActivationDrawer
-          externalKey={openActivation}
+          externalKey={openActivation.id}
           onClose={() => setOpenActivation(null)}
           onOpenCampaign={setOpenCampaign}
           escapeEnabled={openCampaign === null}
+          initialTab={openActivation.tab}
+          focusMaterialId={openActivation.materialId}
         />
       ) : null}
 

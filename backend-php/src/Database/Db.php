@@ -55,7 +55,30 @@ final class Db
         ]);
 
         $pdo->exec("SET time_zone = '+00:00'");
-        $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci");
+
+        /*
+         * The connection collation, chosen from the server's own banner.
+         *
+         * `utf8mb4_0900_ai_ci` is UCA 9.0 and exists only in MySQL 8.0+. Asking
+         * MariaDB for it fails with `1273 Unknown collation` — at connect, so
+         * the application could not even report which server it had found.
+         * `Dialect` reads the version off this handle and answers with a
+         * collation that exists on it.
+         *
+         * The catch stays as a net for a build neither branch anticipates: a
+         * degraded connection collation is survivable, a refused handshake is
+         * not.
+         */
+        $collation = Dialect::collationFor($pdo);
+
+        try {
+            $pdo->exec("SET NAMES utf8mb4 COLLATE {$collation}");
+        } catch (PDOException $error) {
+            if (!self::isMysqlError($error, self::ERR_UNKNOWN_COLLATION)) {
+                throw $error;
+            }
+            $pdo->exec('SET NAMES utf8mb4');
+        }
 
         self::$pdo = $pdo;
         return $pdo;
@@ -290,6 +313,8 @@ final class Db
     public const ERR_NO_REFERENCED_ROW = 1452;
     public const ERR_ROW_IS_REFERENCED = 1451;
     public const ERR_CHECK_CONSTRAINT = 3819;
+    /** MySQL 8 collations do not exist on MariaDB or MySQL 5.7. */
+    public const ERR_UNKNOWN_COLLATION = 1273;
 
     /** @param list<mixed>|array<string,mixed> $params */
     private static function run(string $sql, array $params): PDOStatement

@@ -1,8 +1,8 @@
 # Deploying on cPanel — the Node backend
 
-> **For visitvaleajiului.ro, use `DEPLOY-CPANEL.md` instead.** That account has
+> **For visitvaleajiului.ro, use `DEPLOY-CPANEL-visitvaleajiului.md` instead.** That account has
 > no **Setup Node.js App**, which everything below depends on, so this route is
-> not available there. `DEPLOY-CPANEL.md` deploys the PHP backend, which needs no
+> not available there. `DEPLOY-CPANEL-visitvaleajiului.md` deploys the PHP backend, which needs no
 > Node process on the host at all.
 >
 > Keep this document for a host that *does* offer Node.
