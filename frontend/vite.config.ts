@@ -9,8 +9,8 @@ import react from '@vitejs/plugin-react';
  * same frontend at each in turn. Editing this file to switch would make that a
  * code change, and a code change is something you forget to undo.
  *
- *   npm run dev                                  -> Node
- *   $env:API_TARGET='http://127.0.0.1:8080'; npm run dev   -> PHP
+ *   pnpm dev                                                -> Node
+ *   $env:API_TARGET='http://127.0.0.1:8080'; pnpm run dev   -> PHP
  */
 const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:3000';
 
@@ -22,8 +22,8 @@ const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:3000';
  * rewrites every asset URL with it, and `App.tsx` reads the same value back as
  * `import.meta.env.BASE_URL` for the router, so the two cannot disagree.
  *
- *   npm run build                          -> served from /
- *   $env:APP_BASE_PATH='/app/'; npm run build   -> served from /app/
+ *   pnpm build                               -> served from /
+ *   $env:APP_BASE_PATH='/app/'; pnpm build   -> served from /app/
  *
  * The trailing slash matters to Vite. It is added here rather than demanded of
  * whoever sets the variable.
@@ -46,7 +46,7 @@ export default defineConfig({
      * Pre-transform the route modules at start-up.
      *
      * Vite compiles on demand, so the first visit to a route pays for its whole
-     * import chain. Listing the pages here moves that cost into `npm run dev`,
+     * import chain. Listing the pages here moves that cost into `pnpm dev`,
      * where it is unattended, instead of into the first click. Development only
      * — the production build is a single pre-built bundle.
      */
