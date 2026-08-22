@@ -700,15 +700,26 @@
 
 .strategy-objective-picker label {
   display: flex;
-  gap: 9px;
+  gap: 8px;
   align-items: flex-start;
   font-size: 13.5px;
   line-height: 1.45;
   cursor: pointer;
 }
 
-.strategy-objective-picker input {
-  margin-top: 3px;
+/* The checkbox is a fixed 15px square, and it has to be said explicitly.
+
+   `.form-field input { width: 100% }` above is written for text inputs, and the
+   picker lives inside a `.form-field` — so it caught these too. As flex items
+   claiming 100% of whatever space each row's text left over, the boxes came out
+   between 212px and 275px wide, a different width per row, and the labels
+   started at a different left edge on every line. `flex: none` keeps them from
+   growing or shrinking again. */
+.strategy-objective-picker input[type='checkbox'] {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
   accent-color: var(--brand);
 }
 
@@ -846,5 +857,71 @@
     grid-template-columns: 1fr;
     gap: 4px;
   }
+}
+
+
+/* ===================================================================
+   Modalul de adăugare din Administrare
+
+   `prototype.css` aduce întreg schelele: `.modal-bg`, `.modal`, capul, corpul
+   și subsolul. Ce lipsește sunt două lucruri pe care prototipul nu le cere,
+   fiindcă acolo modalul găzduiește un wizard de campanie, nu un formular scurt.
+   =================================================================== */
+
+/* `.modal` e `min(1320px, 100%)` — lățimea unui wizard cu cuprins lateral.
+   Un formular de patru câmpuri întins pe atât se citește ca un tabel gol. */
+.admin-modal {
+  width: min(720px, 100%);
+}
+
+/* `.modal-body` e `overflow: hidden` peste un rând `1fr`, deci conținutul care
+   nu încape e tăiat, nu derulat. Containerul din interior e cel care derulează,
+   ca antetul și subsolul să rămână pe loc. */
+.admin-modal-scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 26px;
+}
+
+/* Câmpurile stau unul sub altul aici, nu în grila de wizard: la lățimea asta
+   două coloane ar lăsa rânduri de 40 de caractere. */
+.admin-modal-scroll .wizard-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.modal-foot .admin-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+/* Formularele care își poartă propriile butoane — cele două de strategie — le
+   au la finalul unui corp care poate fi lung: programul are treisprezece câmpuri
+   plus lista de obiective. Lipite jos, rămân la îndemână fără să mai fie nevoie
+   ca fiecare formular să-și ridice acțiunile în subsolul modalului. */
+.admin-modal-scroll .wizard-actions {
+  position: sticky;
+  bottom: -20px;
+  z-index: 1;
+  margin: 4px 0 0;
+  padding: 14px 0;
+  background: var(--surface);
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Formularul de reper are propriul cap; în modal titlul îl spune deja. */
+.admin-modal-scroll .strategy-form-head {
+  display: none;
+}
+
+.admin-modal-scroll .strategy-form {
+  border: 0;
+  background: none;
+  padding: 0;
 }
 

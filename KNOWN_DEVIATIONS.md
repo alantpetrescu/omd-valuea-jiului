@@ -126,7 +126,7 @@ reasonable:
    the page could only ever be pixel-identical to the prototype for VIEWER and
    EDITOR; ADMIN would always see one extra block. Moving it out makes the
    screen identical for all three roles, and the visual regression suite
-   (`frontend/tests/visual-parity/`) passes 22/22 with no role-specific
+   (`tests/frontend/visual-parity/`) passes 22/22 with no role-specific
    exception.
 
 This does not duplicate anything: the repere are editable in exactly one place.
@@ -163,7 +163,7 @@ place and lets the operational screen stay exactly what the prototype promised.
 
 ## D-003 — The strategy admin API and its tests are PHP, not Node
 
-**Where:** `backend-php/src/Strategy/`, `backend-php/tests/`
+**Where:** `backend-php/src/Strategy/`, `tests/backend/`
 
 `TASK-1_backend-strategie.md` §1 names `backend/src/strategy/strategy-service.ts`,
 `strategy-clone.ts` and a `node:test` suite under `backend/tests/`. All of it was
@@ -182,7 +182,7 @@ dependency-free PHP runner in the same spirit (no Composer, nothing to install):
 
 ```powershell
 cd backend-php
-php tests/run.php
+php tests/backend/run.php
 ```
 
 It refuses to start against any database whose name does not end in `_test`, and
@@ -314,3 +314,59 @@ iar 10 e mai mare decât 8 — deci verificarea spunea `[OK]` pe exact serverul 
 nu putea rula schema, iar instalarea eșua două pași mai încolo. MariaDB e
 recunoscută acum după nume. Testul AS-D-02 păstrează capcana scrisă negru pe alb.
 
+
+---
+
+## D-008 — Logout golește cookie-ul, dar nu revocă jetonul
+
+**Stare:** activă · **Găsită:** suita de teste, `B-A-07` · **Impact:** mic, dar real
+
+Sesiunile sunt fără stare pe server: jetonul e `userId.expiresAt.semnătură`, iar
+`Session::verify()` îl validează recalculând semnătura. Nu există nicio evidență
+a sesiunilor emise, deci nu există nimic de șters.
+
+`POST /auth/logout` face singurul lucru pe care îl poate face: trimite un cookie
+gol, cu expirare în trecut. Browserul îl uită imediat, și pentru utilizatorul din
+fața ecranului asta *este* deconectarea.
+
+Ce nu face: un jeton copiat înainte de deconectare rămâne valabil până expiră.
+Cine l-a obținut nu-l pierde fiindcă proprietarul a apăsat „Deconectare".
+
+**De ce rămâne așa deocamdată.** Revocarea cere o tabelă de sesiuni și o
+verificare în bază la fiecare cerere — o scriere la autentificare, o citire la
+tot restul. Schema e înghețată (spec §68.4), iar riscul presupune un atacator
+care are deja jetonul, adică o compromitere care nu începe de la butonul de
+deconectare.
+
+**Ce ar rezolva-o**, în ordinea costului: un `token_version` pe utilizator,
+inclus în semnătură și incrementat la deconectare — o coloană, nicio scriere în
+plus la fiecare cerere, și invalidează *toate* sesiunile acelui utilizator
+deodată; sau o tabelă de sesiuni, dacă e nevoie ca deconectarea de pe un
+dispozitiv să le lase pe celelalte în picioare.
+
+**Testul.** `B-A-07b` verifică ce se contractează — că răspunsul golește
+cookie-ul — și nu afirmă că jetonul vechi mai merge. O verificare verde care
+spune „jetonul vechi funcționează" s-ar citi ca intenție, nu ca limitare.
+
+---
+
+## D-009 — Limitatorul de autentificare răspunde 409, nu 429
+
+**Stare:** activă · **Găsită:** suita de teste, `B-A-09` · **Impact:** cosmetic
+
+După zece încercări greșite în cincisprezece minute pe aceeași pereche IP +
+e-mail, autentificarea e refuzată cu `ApiError::conflict` — HTTP **409**, cu
+mesajul „Prea multe încercări de autentificare. Încearcă din nou peste 15
+minute."
+
+Codul consacrat pentru asta e **429 Too Many Requests**, împreună cu antetul
+`Retry-After`. 409 înseamnă altceva: un conflict cu starea resursei.
+
+**De ce nu s-a schimbat odată cu descoperirea.** E contractul livrat. Ecranul de
+autentificare afișează mesajul, nu codul, deci nimic nu se vede diferit pentru
+utilizator — dar un client care ar trata 409 și 429 separat ar trebui schimbat
+în același timp, iar asta nu se face în trecere printr-un test.
+
+**Ce ar rezolva-o.** `ApiError::tooManyRequests()`, cu `Retry-After` calculat din
+fereastra limitatorului, plus actualizarea lui `B-A-09`. Zece minute de lucru,
+într-un moment ales, nu într-unul nimerit.

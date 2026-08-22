@@ -47,7 +47,8 @@ circule în clar.
 **cPanel → MultiPHP Manager** → selectează `descoperavaleajiului.ro` → **8.4** →
 Apply.
 
-Nu e nimic de adaptat în cod. Suita de teste a fost rulată pe **8.1.34** și pe
+Nu e nimic de adaptat în cod. Suita de teste (`pwsh tests/run.ps1`, cu
+`tests/seed.ps1` rulat o dată înainte) a fost rulată pe **8.1.34** și pe
 **8.5.9**, cu `error_reporting=E_ALL`: 137 de verificări trecute pe amândouă,
 fără nicio depreciere. 8.5 fiind mai nouă decât 8.4, tot ce s-a depreciat în 8.2,
 8.3 și 8.4 ar fi apărut acolo.

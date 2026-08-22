@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { AdminModal } from './AdminModal';
+import { ICONS } from './adminIcons';
 import { countLabel, formatDateTime } from '../../domain/services';
 import { StrategyAdminTab } from './StrategyAdminTab';
 
@@ -271,6 +273,64 @@ function UsersTab({
     }
   }
 
+  const fields = (
+    <>
+      <label className="form-field">
+        <span className="form-label">Nume</span>
+        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+      </label>
+      <label className="form-field">
+        <span className="form-label">E-mail</span>
+        <input
+          type="email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+      </label>
+      <label className="form-field">
+        <span className="form-label">Rol</span>
+        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          <option value="ADMIN">Administrator</option>
+          <option value="EDITOR">Editor</option>
+          <option value="VIEWER">Vizualizare</option>
+        </select>
+      </label>
+      <label className="form-field">
+        <span className="form-label">
+          Parolă temporară
+          <small>
+            {editingId
+              ? 'Lasă gol pentru a păstra parola actuală'
+              : 'Minimum 10 caractere; utilizatorul o schimbă la prima autentificare'}
+          </small>
+        </span>
+        <input
+          type="text"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+        />
+      </label>
+    </>
+  );
+
+  const actions = (
+    <div className="wizard-actions admin-modal-actions">
+      <button
+        className="btn secondary"
+        type="button"
+        onClick={() => {
+          setCreating(false);
+          setEditingId(null);
+        }}
+      >
+        Renunță
+      </button>
+      <button className="btn primary" type="button" disabled={saving} onClick={() => void submit()}>
+        {saving ? 'Se salvează…' : 'Salvează'}
+      </button>
+    </div>
+  );
+
   return (
     <section className="activation-list-card">
       <div className="activation-list-count">
@@ -280,73 +340,42 @@ function UsersTab({
         </span>
       </div>
 
+      <div style={{ padding: '0 18px 12px' }}>
+        <button
+          className="btn primary"
+          type="button"
+          onClick={() => {
+            setEditingId(null);
+            setCreating(true);
+            setForm({ name: '', email: '', role: 'VIEWER', password: '' });
+          }}
+        >
+          ＋ Utilizator nou
+        </button>
+      </div>
+
+      {/* One definition of the fields, one container. Creating and editing differ
+          in the badge, the title and what the form starts filled with — not in
+          where they appear. */}
       {creating || editingId ? (
-        <div className="wizard-body">
-          <label className="form-field">
-            <span className="form-label">Nume</span>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </label>
-          <label className="form-field">
-            <span className="form-label">E-mail</span>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </label>
-          <label className="form-field">
-            <span className="form-label">Rol</span>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              <option value="ADMIN">Administrator</option>
-              <option value="EDITOR">Editor</option>
-              <option value="VIEWER">Vizualizare</option>
-            </select>
-          </label>
-          <label className="form-field">
-            <span className="form-label">
-              Parolă temporară
-              <small>
-                {editingId
-                  ? 'Lasă gol pentru a păstra parola actuală'
-                  : 'Minimum 10 caractere; utilizatorul o schimbă la prima autentificare'}
-              </small>
-            </span>
-            <input
-              type="text"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-          </label>
-          <div className="wizard-actions">
-            <button
-              className="btn secondary"
-              type="button"
-              onClick={() => {
-                setCreating(false);
-                setEditingId(null);
-              }}
-            >
-              Renunță
-            </button>
-            <button className="btn primary" type="button" disabled={saving} onClick={() => void submit()}>
-              {saving ? 'Se salvează…' : 'Salvează'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ padding: '0 18px 12px' }}>
-          <button
-            className="btn primary"
-            type="button"
-            onClick={() => {
-              setCreating(true);
-              setForm({ name: '', email: '', role: 'VIEWER', password: '' });
-            }}
-          >
-            ＋ Utilizator nou
-          </button>
-        </div>
-      )}
+        <AdminModal
+          mode={editingId ? 'edit' : 'create'}
+          kicker="Utilizator nou"
+          title={editingId ? `Editează utilizatorul – ${form.name}` : 'Utilizator nou'}
+          description={
+            editingId
+              ? 'Lasă parola goală pentru a o păstra pe cea actuală.'
+              : 'Contul primește o parolă temporară, pe care o schimbă la prima autentificare.'
+          }
+          onClose={() => {
+            setCreating(false);
+            setEditingId(null);
+          }}
+          footer={actions}
+        >
+          <div className="wizard-body">{fields}</div>
+        </AdminModal>
+      ) : null}
 
       <div className="activation-table-scroll">
         <table className="activation-list-table">
@@ -376,20 +405,37 @@ function UsersTab({
                 </td>
                 <td>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : '—'}</td>
                 <td>
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={() => {
-                      setEditingId(user.id);
-                      setCreating(false);
-                      setForm({ name: user.name, email: user.email, role: user.role, password: '' });
-                    }}
-                  >
-                    Editează
-                  </button>
-                  <button className="btn ghost" type="button" onClick={() => void toggle(user)}>
-                    {user.isActive ? 'Dezactivează' : 'Activează'}
-                  </button>
+                  <div className="strategy-row-actions">
+                    <button
+                      type="button"
+                      className="activation-icon-btn"
+                      data-tooltip="Editează utilizatorul"
+                      title="Nume, e-mail, rol și, opțional, o parolă temporară nouă"
+                      aria-label={`Editează utilizatorul ${user.name}`}
+                      onClick={() => {
+                        setEditingId(user.id);
+                        setCreating(false);
+                        setForm({ name: user.name, email: user.email, role: user.role, password: '' });
+                      }}
+                    >
+                      {ICONS.edit}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="activation-icon-btn"
+                      data-tooltip={user.isActive ? 'Dezactivează contul' : 'Reactivează contul'}
+                      title={
+                        user.isActive
+                          ? 'Nu se mai poate autentifica; ce a creat rămâne neatins'
+                          : 'Poate din nou să se autentifice'
+                      }
+                      aria-label={`${user.isActive ? 'Dezactivează' : 'Activează'} contul ${user.name}`}
+                      onClick={() => void toggle(user)}
+                    >
+                      {ICONS.toggle}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -554,6 +600,78 @@ function CatalogsTab({
     }
   }
 
+  const catalogFields = (
+    <>
+      {/*
+        The code, shown in both modes.
+
+        It used to appear only on creation, with a note saying it could never
+        change. It can, while nothing depends on it — and hiding the field at
+        all left the reader with no way to see what the code even was without
+        leaving the form. Read-only with the reason underneath says more than
+        an absent field ever did.
+      */}
+      <label className="form-field">
+        <span className="form-label">
+          Cod
+          {creating && conventionHint ? <small>{conventionHint}</small> : null}
+          {!creating && codeLockReason ? (
+            <small>Codul nu poate fi schimbat: {codeLockReason}.</small>
+          ) : null}
+        </span>
+        {/*
+          No `toUpperCase()`. It silently rewrote what the author typed, and
+          it is the one thing the code rule forbids — the application
+          validates a code, it does not correct it. The convention is
+          suggested above instead, built from the codes already in this
+          nomenclator.
+        */}
+        <input
+          value={form.code}
+          disabled={!codeEditable}
+          onChange={(e) => setForm({ ...form, code: e.target.value })}
+        />
+      </label>
+      <label className="form-field">
+        <span className="form-label">Denumire</span>
+        <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
+      </label>
+      <label className="form-field">
+        <span className="form-label">Etichetă scurtă</span>
+        <input
+          value={form.displayLabel}
+          onChange={(e) => setForm({ ...form, displayLabel: e.target.value })}
+        />
+      </label>
+      <label className="form-field">
+        <span className="form-label">Descriere</span>
+        <textarea
+          rows={2}
+          value={form.hint}
+          onChange={(e) => setForm({ ...form, hint: e.target.value })}
+        />
+      </label>
+    </>
+  );
+
+  const catalogActions = (
+      <div className="wizard-actions admin-modal-actions">
+        <button
+          className="btn secondary"
+          type="button"
+          onClick={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+        >
+          Renunță
+        </button>
+        <button className="btn primary" type="button" onClick={() => void save()}>
+          Salvează
+        </button>
+      </div>
+  );
+
   return (
     <section className="activation-list-card">
       <div className="activation-filter-panel">
@@ -580,72 +698,27 @@ function CatalogsTab({
       </div>
 
       {creating || editing ? (
-        <div className="wizard-body">
-          {/*
-            The code, shown in both modes.
-
-            It used to appear only on creation, with a note saying it could never
-            change. It can, while nothing depends on it — and hiding the field at
-            all left the reader with no way to see what the code even was without
-            leaving the form. Read-only with the reason underneath says more than
-            an absent field ever did.
-          */}
-          <label className="form-field">
-            <span className="form-label">
-              Cod
-              {creating && conventionHint ? <small>{conventionHint}</small> : null}
-              {!creating && codeLockReason ? (
-                <small>Codul nu poate fi schimbat: {codeLockReason}.</small>
-              ) : null}
-            </span>
-            {/*
-              No `toUpperCase()`. It silently rewrote what the author typed, and
-              it is the one thing the code rule forbids — the application
-              validates a code, it does not correct it. The convention is
-              suggested above instead, built from the codes already in this
-              nomenclator.
-            */}
-            <input
-              value={form.code}
-              disabled={!codeEditable}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-            />
-          </label>
-          <label className="form-field">
-            <span className="form-label">Denumire</span>
-            <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
-          </label>
-          <label className="form-field">
-            <span className="form-label">Etichetă scurtă</span>
-            <input
-              value={form.displayLabel}
-              onChange={(e) => setForm({ ...form, displayLabel: e.target.value })}
-            />
-          </label>
-          <label className="form-field">
-            <span className="form-label">Descriere</span>
-            <textarea
-              rows={2}
-              value={form.hint}
-              onChange={(e) => setForm({ ...form, hint: e.target.value })}
-            />
-          </label>
-          <div className="wizard-actions">
-            <button
-              className="btn secondary"
-              type="button"
-              onClick={() => {
-                setCreating(false);
-                setEditing(null);
-              }}
-            >
-              Renunță
-            </button>
-            <button className="btn primary" type="button" onClick={() => void save()}>
-              Salvează
-            </button>
-          </div>
-        </div>
+        <AdminModal
+          mode={editing ? 'edit' : 'create'}
+          kicker="Valoare nouă"
+          title={
+            editing
+              ? `Editează valoarea – ${editing}`
+              : `Valoare nouă — ${CATALOGS.find((entry) => entry.key === catalog)?.label ?? catalog}`
+          }
+          description={
+            editing
+              ? 'Codul poate fi schimbat doar cât valoarea e nefolosită, nesistem și neatinsă de import.'
+              : 'Codul e identitatea valorii. Poate fi schimbat mai târziu doar cât nimic nu depinde de el.'
+          }
+          onClose={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+          footer={catalogActions}
+        >
+          <div className="wizard-body">{catalogFields}</div>
+        </AdminModal>
       ) : null}
 
       <div className="activation-table-scroll">
@@ -685,26 +758,72 @@ function CatalogsTab({
                   </span>
                 </td>
                 <td>
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={() => void beginEdit(row)}
-                  >
-                    Editează
-                  </button>
+                  <div className="strategy-row-actions">
+                    <button
+                      type="button"
+                      className="activation-icon-btn"
+                      data-tooltip="Editează valoarea"
+                      title="Denumire, etichetă și descriere. Codul, doar cât nimic nu depinde de el."
+                      aria-label={`Editează valoarea ${row.code}`}
+                      onClick={() => void beginEdit(row)}
+                    >
+                      {ICONS.edit}
+                    </button>
 
-                  {/* A system value offers neither delete nor deactivate. */}
-                  {row.isSystem ? (
-                    <span className="muted-copy">valoare protejată</span>
-                  ) : row.usageCount > 0 ? (
-                    <button className="btn ghost" type="button" onClick={() => void deactivate(row)}>
-                      {row.isActive ? 'Dezactivează' : 'Activează'}
+                    {/*
+                      A system value offers neither. Both buttons stay in place,
+                      disabled with the reason on them: one that disappears reads
+                      as a feature that does not exist, and the column would jump
+                      from row to row.
+                    */}
+                    <button
+                      type="button"
+                      className="activation-icon-btn"
+                      disabled={row.isSystem === 1}
+                      data-tooltip={
+                        row.isSystem
+                          ? 'Valoare protejată'
+                          : row.isActive
+                            ? 'Dezactivează valoarea'
+                            : 'Reactivează valoarea'
+                      }
+                      title={
+                        row.isSystem
+                          ? 'Valoarea e necesară funcționării aplicației și nu poate fi dezactivată.'
+                          : row.isActive
+                            ? 'Rămâne pe înregistrările existente, dar nu mai poate fi aleasă în altele noi'
+                            : 'Redevine disponibilă pentru înregistrări noi'
+                      }
+                      aria-label={`${row.isActive ? 'Dezactivează' : 'Activează'} valoarea ${row.code}`}
+                      onClick={() => void deactivate(row)}
+                    >
+                      {ICONS.toggle}
                     </button>
-                  ) : (
-                    <button className="btn ghost" type="button" onClick={() => void remove(row)}>
-                      Șterge
+
+                    <button
+                      type="button"
+                      className="activation-icon-btn danger"
+                      disabled={row.isSystem === 1 || row.usageCount > 0}
+                      data-tooltip={
+                        row.isSystem
+                          ? 'Valoare protejată'
+                          : row.usageCount > 0
+                            ? 'Folosită — doar dezactivare'
+                            : 'Șterge valoarea'
+                      }
+                      title={
+                        row.isSystem
+                          ? 'Valoarea e necesară funcționării aplicației și nu poate fi ștearsă.'
+                          : row.usageCount > 0
+                            ? `Nu se poate șterge: folosită în ${countLabel(row.usageCount, 'înregistrare', 'înregistrări')}. Dezactiveaz-o.`
+                            : 'Ștergere definitivă, cu confirmare'
+                      }
+                      aria-label={`Șterge valoarea ${row.code}`}
+                      onClick={() => void remove(row)}
+                    >
+                      {ICONS.remove}
                     </button>
-                  )}
+                  </div>
                 </td>
               </tr>
             ))}

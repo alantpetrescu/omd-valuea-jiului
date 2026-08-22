@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 namespace Omd\Campaigns;
 
+use Omd\Activations\ActivationCascade;
 use Omd\Audit\Audit;
 use Omd\Database\Db;
 use Omd\Http\ApiError;
@@ -392,8 +393,11 @@ final class CampaignWrite
     ): void {
         Db::transaction(static function () use ($externalKey, $input, $expectedVersion, $userId): void {
             $existing = Db::one(
-                'SELECT id, strategy_version_id, version_number, title
-                   FROM campaigns WHERE external_key = ? AND deleted_at IS NULL',
+                'SELECT c.id, c.strategy_version_id, c.version_number, c.title,
+                        st.code AS statusCode
+                   FROM campaigns c
+                   JOIN campaign_statuses st ON st.id = c.status_id
+                  WHERE c.external_key = ? AND c.deleted_at IS NULL',
                 [$externalKey],
             );
             if ($existing === null) {
@@ -439,14 +443,35 @@ final class CampaignWrite
 
             self::replaceRelations((string) $existing['id'], $input, $strategyVersionId, $userId);
 
+            /*
+             * The stage travels down to the activations.
+             *
+             * Inside this transaction on purpose: a campaign that reads `Draft`
+             * while its activations still read `Activă` is a state the
+             * operational screens will happily draw, and nothing later would
+             * reconcile it. `ActivationCascade` holds the rule and the reason.
+             */
+            $cascaded = ActivationCascade::applyCampaignStatus(
+                (string) $existing['id'],
+                (string) $existing['statusCode'],
+                $input['statusCode'],
+                $userId,
+            );
+
             Audit::write(
                 userId: $userId,
                 action: 'UPDATE',
                 entityType: 'CAMPAIGN',
                 entityId: (string) $existing['id'],
                 entityExternalKey: $externalKey,
-                oldValues: ['title' => $existing['title']],
-                newValues: ['title' => $input['title'], 'status' => $input['statusCode']],
+                oldValues: ['title' => $existing['title'], 'status' => $existing['statusCode']],
+                newValues: array_filter([
+                    'title' => $input['title'],
+                    'status' => $input['statusCode'],
+                    // Only when it happened — an empty count on every ordinary
+                    // save would be noise in the trail.
+                    'activariActualizate' => $cascaded > 0 ? $cascaded : null,
+                ], static fn (mixed $value): bool => $value !== null),
             );
         });
     }

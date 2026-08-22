@@ -20,7 +20,7 @@ frontend/src/features/admin/StrategyReperView.tsx   nou — fișa read-only
 frontend/src/features/admin/DeleteReperDialog.tsx   nou — confirmarea cu dependențe
 frontend/src/domain/sorting.ts                      nou — comparație naturală
 frontend/src/styles/app.css                         extins — bara de acțiuni
-frontend/tests/admin-strategy/                      nou — suita de UI
+tests/frontend/                                     suita de UI
 ```
 
 `sorting.ts` stă în `domain/` fiindcă e o regulă pură, nu o preocupare de
@@ -123,12 +123,12 @@ Când ștergerea e permisă, aceeași structură cu butonul `Șterge definitiv`.
 
 ## 3. Suita de teste
 
-Se adaugă sub `frontend/tests/`, alături de `visual-parity/`, cu același
+Se adaugă sub `tests/frontend/`, alături de `visual-parity/`, cu același
 mecanism: Playwright peste mock API-ul alimentat din DEMO_SEED. Mock-ul se
 extinde cu endpointurile din Task 1.
 
 ```bash
-cd frontend && npm run test:admin-strategy
+pwsh tests/frontend/run.ps1 -Only admin
 ```
 
 ### 3.1. Acțiuni și stări
@@ -211,7 +211,7 @@ goli tăcut câmpurile pe care nu le trimite.
 |---|---|---|
 | AS-U-37 | `EDITOR` navighează direct la `/admin` | ecran care explică, fără crash |
 | AS-U-38 | `VIEWER` la `/admin` | idem |
-| AS-U-39 | `npm run test:parity` | 22/22, 0 pixeli |
+| AS-U-39 | `pwsh tests/frontend/run.ps1 -Only parity` | 22/22, 0 pixeli |
 | AS-U-40 | consola pe `/admin` | zero erori (§69) |
 
 AS-U-37 și AS-U-38 acoperă un caz pe care nu l-am verificat până acum: linkul

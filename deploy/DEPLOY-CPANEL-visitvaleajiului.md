@@ -53,8 +53,7 @@ Alege cea mai nouă versiune pe care o oferă gazda. 8.1 nu mai primește
 actualizări de securitate, deci e ultima opțiune, nu prima.
 
 Suita de teste a fost rulată pe **8.1.34** și pe **8.5.9**, cu
-`error_reporting=E_ALL`: 137 de verificări trecute pe amândouă, fără nicio
-depreciere. 8.5 fiind mai nouă decât 8.4, tot ce s-a depreciat în 8.2, 8.3 și 8.4
+`error_reporting=E_ALL`: fără nicio depreciere pe niciuna. 8.5 fiind mai nouă decât 8.4, tot ce s-a depreciat în 8.2, 8.3 și 8.4
 ar fi apărut acolo. Codul nu folosește parametri implicit nullable, interpolare
 `${…}`, proprietăți dinamice sau funcții scoase din limbaj.
 
@@ -62,7 +61,7 @@ Pe o versiune diferită de cea implicită, poți rula chiar tu suita:
 
 ```powershell
 $env:OMD_TEST_PHP_FLAGS = '-c C:\cale\catre\php.ini'
-& 'C:\cale\catre\php.exe' -c 'C:\cale\catre\php.ini' tests/run.php
+& 'C:\cale\catre\php.exe' -c 'C:\cale\catre\php.ini' tests/backend/run.php
 ```
 
 ### Extensiile — nu ai ce bifa, și e în regulă
@@ -576,10 +575,17 @@ s-ar fi văzut dintr-o recitire — au ieșit doar rulând fiecare pas:
 - **privilegiile lui `visit_omd_app`**. Nu am cum să le văd din capturi. Dacă
   `migrate` eșuează la primul `CREATE TABLE`, ăsta e motivul.
 
-**Ce s-a schimbat de atunci.** Backendul PHP are acum o suită de teste —
-`php tests/run.php`, 137 de verificări pe `omd_vj_test`, fără dependențe. Lista
-de mai sus descrie ce fusese probat manual la momentul primei instalări; regulile
-de business, schema și cele 53 de rute sunt acoperite automat de atunci.
+**Ce s-a schimbat de atunci.** Aplicația are acum o suită completă, în
+`tests/` — backend, frontend și parcursuri hibride, cu specificațiile în
+[`docs/tests-specs/`](../docs/tests-specs/README.md):
+
+```powershell
+pwsh tests/seed.ps1      # o dată: omd_vj_test cu migrațiile și pachetele demo
+pwsh tests/run.ps1       # toate trei suitele, sub cinci minute
+```
+
+Lista de mai sus descrie ce fusese probat manual la prima instalare. Regulile de
+business, schema, rutele și ecranele sunt acoperite automat de atunci.
 
 ---
 

@@ -22,7 +22,7 @@ Backend framework:          Express 4 + TypeScript 5 (CommonJS build)
 DB driver / ORM:            mysql2 — raw prepared statements, no ORM
 JSON Schema validator:      ajv (Draft 2020-12) — added in Stage 2
 Password hashing:           Argon2id — added in Stage 1 step 6
-Test framework:             none — `backend-php/tests/` is a plain PHP runner
+Test framework:             none — `tests/` is a plain PHP + Node runner
 Browser E2E framework:      Playwright (visual parity + Administrare → Strategie)
 Process manager:            to be selected at deployment
 ```
@@ -111,14 +111,17 @@ nomenclature, so an unused public still counts against coverage) and
 role, plus products and KPI definitions). A `usageCount` cannot drive the
 matrices — they need to know *which* campaign, with *what* role.
 
-```bash
-cd frontend && npm run test:parity
+```powershell
+pwsh tests/run.ps1
 ```
 
-Drives both applications through 22 states and compares them pixel by pixel.
-Last run: 12/12 static, 10/10 interactive, 0 differing pixels; 12/12 as ADMIN
-too; 3/3 role gate; 14/14 Administrare → Strategie; 6/6 stale-API. See
-`frontend/tests/visual-parity/README.md`.
+The whole suite — backend, frontend and hybrid — in under five minutes. The
+specifications are in [`docs/tests-specs/`](docs/tests-specs/README.md); the
+runner is `tests/run.ps1` and the one-time database setup is `tests/seed.ps1`.
+
+Last run: 291 backend checks, 119 frontend (including 22 visual-parity states at
+zero differing pixels, as VIEWER and again as ADMIN), 60 hybrid — 470 in 186
+seconds.
 
 ## Deployment on a tailnet
 

@@ -32,6 +32,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { countLabel } from '../../domain/services';
 import { naturalCompare } from '../../domain/sorting';
+import { AdminModal } from './AdminModal';
+import { ICONS } from './adminIcons';
 import { DeleteReperDialog } from './DeleteReperDialog';
 import {
   KIND_LABEL,
@@ -68,20 +70,8 @@ const KINDS: Array<[Kind, string]> = [
   ['objectives', 'Obiective SMART'],
 ];
 
-/*
- * Row actions, as Unicode characters rather than an icon library (SPEC §7.1).
- * Zero new dependencies, and the same visual weight as the rest of the app.
- *
- * Every one carries its name in `title` and `aria-label`: an icon without a name
- * is not a button, it is a guess.
- */
-const ICONS = {
-  view: '◉',
-  edit: '✎',
-  toggle: '⊘',
-  remove: '🗑',
-  activate: '▲',
-} as const;
+// Shared with the other two admin tabs — see `adminIcons.ts` for the glyphs and
+// for what each of the three attributes on these buttons is for.
 
 type SortColumn = 'code' | 'title' | 'usage' | 'state';
 type SortState = { column: SortColumn; direction: 'asc' | 'desc' } | null;
@@ -122,6 +112,10 @@ function SortableHeader({
         type="button"
         className={active ? 'strategy-sort active' : 'strategy-sort'}
         onClick={() => onSort(column)}
+        /* No `data-tooltip` here — these are not `.activation-icon-btn`, so no
+           bubble is drawn, and the header already shows its own name. What is
+           worth saying is that clicking cycles rather than toggles. */
+        title={`Sortează după ${label.toLowerCase()} — crescător, descrescător, apoi ordinea implicită`}
         aria-label={`Sortează după ${label}`}
       >
         {label}
@@ -331,16 +325,28 @@ export function StrategyAdminTab({
         </div>
 
         {creating || editing ? (
-          <StrategyReperForm
-            kind={kind}
-            versionKey={versionKey}
-            record={editing}
-            objectives={objectives}
-            linkedObjectiveCodes={editing ? objectivesByProgram.get(editing.code) ?? [] : []}
-            existingCodes={rows.map((row) => row.code)}
-            onSaved={(message) => void afterWrite(message)}
-            onCancel={closeForms}
-          />
+          <AdminModal
+            mode={editing ? 'edit' : 'create'}
+            kicker={`${KIND_LABEL[kind].charAt(0).toUpperCase()}${KIND_LABEL[kind].slice(1)} nou`}
+            title={
+              editing
+                ? `Editează ${KIND_LABEL[kind]}ul – ${editing.code}`
+                : `${KIND_LABEL[kind].charAt(0).toUpperCase()}${KIND_LABEL[kind].slice(1)} nou`
+            }
+            description="Codul vine din matricea strategică a beneficiarului. Aplicația îl validează, nu îl rescrie."
+            onClose={closeForms}
+          >
+            <StrategyReperForm
+              kind={kind}
+              versionKey={versionKey}
+              record={editing}
+              objectives={objectives}
+              linkedObjectiveCodes={editing ? objectivesByProgram.get(editing.code) ?? [] : []}
+              existingCodes={rows.map((row) => row.code)}
+              onSaved={(message) => void afterWrite(message)}
+              onCancel={closeForms}
+            />
+          </AdminModal>
         ) : null}
 
         <div className="activation-table-scroll">
@@ -389,8 +395,13 @@ export function StrategyAdminTab({
                           <button
                             type="button"
                             className="activation-icon-btn"
-                            title={isOpen ? 'Închide fișa' : 'Vizualizează'}
-                            aria-label={`${isOpen ? 'Închide fișa' : 'Vizualizează'} ${row.code}`}
+                            data-tooltip={isOpen ? 'Închide fișa' : 'Vezi fișa completă'}
+                            title={
+                              isOpen
+                                ? 'Închide fișa'
+                                : 'Deschide fișa sub rând — toate câmpurile, fără să intri în editare'
+                            }
+                            aria-label={`${isOpen ? 'Închide fișa' : 'Vezi fișa completă a'} ${row.code}`}
                             onClick={() =>
                               setOpened((current) =>
                                 current.includes(row.code)
@@ -405,7 +416,8 @@ export function StrategyAdminTab({
                           <button
                             type="button"
                             className="activation-icon-btn"
-                            title="Editează"
+                            data-tooltip="Editează reperul"
+                            title="Deschide formularul cu datele existente"
                             aria-label={`Editează ${row.code}`}
                             onClick={() => {
                               setCreating(false);
@@ -419,7 +431,12 @@ export function StrategyAdminTab({
                           <button
                             type="button"
                             className="activation-icon-btn"
-                            title={row.isActive ? 'Dezactivează' : 'Activează'}
+                            data-tooltip={row.isActive ? 'Dezactivează' : 'Activează'}
+                            title={
+                              row.isActive
+                                ? 'Rămâne rezolvabil în campaniile existente, dar nu mai poate fi ales în înregistrări noi'
+                                : 'Redevine disponibil pentru înregistrări noi'
+                            }
                             aria-label={`${row.isActive ? 'Dezactivează' : 'Activează'} ${row.code}`}
                             onClick={() => void toggleActive(row)}
                           >
@@ -433,10 +450,11 @@ export function StrategyAdminTab({
                             type="button"
                             className="activation-icon-btn danger"
                             disabled={blocked}
+                            data-tooltip={blocked ? 'Folosit — doar dezactivare' : 'Șterge definitiv'}
                             title={
                               blocked
                                 ? `Nu se poate șterge: folosit în ${countLabel(row.usageCount, 'campanie', 'campanii')}. Dezactivează-l.`
-                                : 'Șterge'
+                                : 'Ștergere definitivă, cu confirmare și lista dependențelor'
                             }
                             aria-label={
                               blocked
@@ -551,13 +569,25 @@ function VersionsCard({
       </div>
 
       {form !== null ? (
-        <VersionForm
-          version={form === 'new' ? null : form}
-          versions={versions}
-          onSaved={onSaved}
-          onCancel={() => onForm(null)}
-          onError={onError}
-        />
+        <AdminModal
+          mode={form === 'new' ? 'create' : 'edit'}
+          kicker="Versiune nouă"
+          title={form === 'new' ? 'Versiune strategică nouă' : `Editează versiunea – ${form.id}`}
+          description={
+            form === 'new'
+              ? 'Un ciclu nou pornește de obicei din cel precedent — reperele se pot copia dintr-o versiune existentă.'
+              : 'Cheia nu se schimbă: e cea după care importul recunoaște versiunea.'
+          }
+          onClose={() => onForm(null)}
+        >
+          <VersionForm
+            version={form === 'new' ? null : form}
+            versions={versions}
+            onSaved={onSaved}
+            onCancel={() => onForm(null)}
+            onError={onError}
+          />
+        </AdminModal>
       ) : null}
 
       <div className="activation-table-scroll">
@@ -597,7 +627,14 @@ function VersionsCard({
                       <button
                         type="button"
                         className="activation-icon-btn"
-                        title={version.id === openVersionKey ? 'Reperele sunt deschise' : 'Vizualizează reperele'}
+                        data-tooltip={
+                          version.id === openVersionKey ? 'Reperele sunt deschise' : 'Vezi reperele'
+                        }
+                        title={
+                          version.id === openVersionKey
+                            ? 'Reperele acestei versiuni sunt deja afișate mai jos'
+                            : 'Afișează pilonii, programele și obiectivele acestei versiuni'
+                        }
                         aria-label={`Deschide reperele versiunii ${version.id}`}
                         onClick={() => onSelect(version.id)}
                       >
@@ -607,7 +644,8 @@ function VersionsCard({
                       <button
                         type="button"
                         className="activation-icon-btn"
-                        title="Editează versiunea"
+                        data-tooltip="Editează versiunea"
+                        title="Denumire, perioadă și note. Cheia nu se schimbă — după ea recunoaște importul versiunea."
                         aria-label={`Editează versiunea ${version.id}`}
                         onClick={() => onForm(version)}
                       >
@@ -618,10 +656,11 @@ function VersionsCard({
                         type="button"
                         className="activation-icon-btn"
                         disabled={isActive}
+                        data-tooltip={isActive ? 'Cea activă nu se arhivează' : 'Arhivează versiunea'}
                         title={
                           isActive
                             ? 'Versiunea activă nu se arhivează. Activează altă versiune, iar aceasta se arhivează automat.'
-                            : 'Arhivează versiunea'
+                            : 'Iese din uz, dar rămâne pentru campaniile care o folosesc'
                         }
                         aria-label={`Arhivează versiunea ${version.id}`}
                         onClick={() => onAction('archive', version.id)}
@@ -633,12 +672,19 @@ function VersionsCard({
                         type="button"
                         className="activation-icon-btn danger"
                         disabled={blocked}
+                        data-tooltip={
+                          version.campaignCount > 0
+                            ? 'Are campanii — nu se poate'
+                            : version.status !== 'DRAFT'
+                              ? 'Doar versiunile în lucru'
+                              : 'Șterge versiunea'
+                        }
                         title={
                           version.campaignCount > 0
                             ? `Nu se poate șterge: ${countLabel(version.campaignCount, 'campanie o folosește', 'campanii o folosesc')}.`
                             : version.status !== 'DRAFT'
                               ? 'Doar o versiune în lucru (DRAFT) poate fi ștearsă.'
-                              : 'Șterge versiunea și reperele ei'
+                              : 'Șterge versiunea împreună cu toate reperele ei'
                         }
                         aria-label={`Șterge versiunea ${version.id}`}
                         onClick={() => onDelete(version)}
@@ -651,7 +697,8 @@ function VersionsCard({
                         <button
                           type="button"
                           className="activation-icon-btn"
-                          title="Activează versiunea"
+                          data-tooltip="Activează versiunea"
+                          title="Devine versiunea curentă pentru campaniile noi; cea activă acum se arhivează"
                           aria-label={`Activează versiunea ${version.id}`}
                           onClick={() => onAction('activate', version.id)}
                         >

@@ -8,8 +8,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:parity": "bash tests/visual-parity/run.sh",
-    "test:admin-strategy": "bash tests/admin-strategy/run.sh"
+    "test": "powershell -NoProfile -ExecutionPolicy Bypass -File ../tests/run.ps1",
+    "test:frontend": "powershell -NoProfile -ExecutionPolicy Bypass -File ../tests/frontend/run.ps1 -All",
+    "test:backend": "php ../tests/backend/run.php",
+    "test:hybrid": "powershell -NoProfile -ExecutionPolicy Bypass -File ../tests/hybrid/run.ps1"
   },
   "dependencies": {
     "react": "^18.3.1",

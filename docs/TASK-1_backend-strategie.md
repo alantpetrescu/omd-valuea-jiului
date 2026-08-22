@@ -220,7 +220,7 @@ Testele de permisiuni se fac cu cereri directe, nu prin UI (§58).
 
 | ID | Verifică | Așteptat |
 |---|---|---|
-| AS-B-R01 | `npm run test:parity` după toate modificările | 22/22, 0 pixeli |
+| AS-B-R01 | `pwsh tests/frontend/run.ps1 -Only parity` după toate modificările | 22/22, 0 pixeli |
 | AS-B-R02 | reimportul `OMD_CAMPAIGNS_PACKAGE_DEMO_SEED_v1.json` | idempotent, fără duplicate |
 | AS-B-R03 | valorile golden după reimport | 4 piloni, 8 programe, 18 obiective |
 
